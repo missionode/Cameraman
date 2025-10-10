@@ -61,19 +61,19 @@
 
         .crosshair {
             position: absolute;
-            width: 60px;
-            height: 60px;
+            width: 50px;
+            height: 50px;
             transform: translate(-50%, -50%);
             pointer-events: auto;
-            opacity: 0.9;
+            opacity: 0.7;
             cursor: pointer;
-            transition: all 0.1s ease;
+            transition: all 0.2s ease;
         }
 
         .crosshair::before, .crosshair::after {
             content: '';
             position: absolute;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.6);
             box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
         }
 
@@ -97,15 +97,16 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 8px;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.9);
+            width: 6px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.6);
             border-radius: 50%;
             transform: translate(-50%, -50%);
             box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
         }
 
         .crosshair.locked {
+            opacity: 1;
             z-index: 10;
         }
 
@@ -118,8 +119,8 @@
 
         .crosshair.locked .dot {
             background: #48bb78;
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
         }
 
         .center-guide {
@@ -161,7 +162,7 @@
         /* Controls positioned 30px up from bottom */
         .controls {
             position: absolute;
-            bottom: 60px; /* 30px up from previous 30px position */
+            bottom: 60px;
             left: 0;
             width: 100%;
             display: flex;
@@ -307,38 +308,6 @@
             display: none;
         }
 
-        /* Processing overlay */
-        .processing-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 20;
-            font-size: 1.5rem;
-            color: white;
-            flex-direction: column;
-            gap: 20px;
-            display: none;
-        }
-
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: #48bb78;
-            animation: spin 1s ease-in-out infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
         /* Thumbnails container with flex */
         .locked-faces-container {
             position: absolute;
@@ -378,7 +347,7 @@
 
         .zoom-indicator {
             position: absolute;
-            bottom: 140px; /* Adjusted for moved controls */
+            bottom: 140px;
             left: 0;
             width: 100%;
             display: flex;
@@ -546,12 +515,6 @@
         <!-- Countdown Overlay -->
         <div class="countdown-overlay" id="countdown-overlay"></div>
         
-        <!-- Processing Overlay -->
-        <div class="processing-overlay" id="processing-overlay">
-            <div class="spinner"></div>
-            <div>Processing Video - Trimming last 10 seconds...</div>
-        </div>
-        
         <div class="status-bar">
             <div class="status">
                 <div class="status-dot" id="status-dot"></div>
@@ -565,7 +528,7 @@
         </div>
         
         <div class="camera-indicator">
-            <span id="camera-mode">Rear Camera</span>
+            <span id="camera-mode">Front Camera - Face Marking Mode</span>
         </div>
         
         <div class="face-count">
@@ -573,7 +536,7 @@
         </div>
         
         <div class="tracking-mode">
-            <span id="tracking-mode">Auto Tracking</span>
+            <span id="tracking-mode">Tap faces to mark them</span>
         </div>
         
         <div class="locked-faces-container" id="locked-faces-container" style="display: none;">
@@ -633,7 +596,6 @@
         const recordingCanvas = document.getElementById('recording-canvas');
         const recordingCtx = recordingCanvas.getContext('2d');
         const countdownOverlay = document.getElementById('countdown-overlay');
-        const processingOverlay = document.getElementById('processing-overlay');
 
         // App state
         let stream = null;
@@ -657,9 +619,7 @@
         let recordingInterval = null;
         let fileHandle = null;
         let writableStream = null;
-        let isFrontCamera = false;
-        let recordedChunks = [];
-        let recordingDuration = 0;
+        let isFrontCamera = true; // Start with front camera
 
         // Face locking system
         let lockedFaces = new Map();
@@ -682,8 +642,8 @@
                 model = await blazeface.load();
                 statusText.textContent = 'AI model loaded';
                 
-                // Start the camera (start with rear camera)
-                await startCamera(false);
+                // Start with front camera for face marking
+                await startCamera(true);
                 
                 // Start face detection
                 startFaceDetection();
@@ -724,7 +684,7 @@
         }
 
         // Start camera with specified facing mode
-        async function startCamera(useFrontCamera = false) {
+        async function startCamera(useFrontCamera = true) {
             try {
                 statusText.textContent = 'Starting camera...';
                 
@@ -744,11 +704,11 @@
                 
                 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
                 
-                // Use maximum quality settings
+                // Use balanced quality settings
                 const videoConstraints = {
-                    width: { ideal: 4096 },
-                    height: { ideal: 2160 },
-                    frameRate: { ideal: 60 },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    frameRate: { ideal: 30 },
                     facingMode: useFrontCamera ? 'user' : 'environment'
                 };
                 
@@ -760,6 +720,15 @@
                 video.srcObject = stream;
                 video.muted = true;
                 isFrontCamera = useFrontCamera;
+                
+                // Reset zoom and pan when switching cameras
+                currentZoom = 1;
+                targetZoom = 1;
+                currentPanX = 0;
+                targetPanX = 0;
+                currentPanY = 0;
+                targetPanY = 0;
+                video.style.transform = 'scale(1) translate(0%, 0%)';
                 
                 // Apply orientation settings
                 if (!useFrontCamera) {
@@ -781,22 +750,20 @@
                 }
                 
                 // Update UI based on camera mode
-                cameraMode.textContent = useFrontCamera ? 'Front Camera' : 'Rear Camera';
+                cameraMode.textContent = useFrontCamera ? 'Front Camera - Face Marking Mode' : 'Rear Camera - Recording Mode';
                 
                 // Disable recording for front camera
                 recordButton.disabled = useFrontCamera;
                 if (useFrontCamera) {
-                    recordButton.title = 'Recording disabled for front camera';
-                    // Reset zoom and pan for front camera
-                    currentZoom = 1;
-                    targetZoom = 1;
-                    currentPanX = 0;
-                    targetPanX = 0;
-                    currentPanY = 0;
-                    targetPanY = 0;
-                    video.style.transform = 'scale(1) translate(0%, 0%)';
+                    recordButton.title = 'Switch to rear camera to record';
+                    trackingMode.textContent = 'Tap faces to mark them';
                 } else {
                     recordButton.title = 'Start recording';
+                    if (lockedFaces.size > 0) {
+                        trackingMode.textContent = `Tracking ${lockedFaces.size} locked face${lockedFaces.size > 1 ? 's' : ''}`;
+                    } else {
+                        trackingMode.textContent = 'Auto tracking all faces';
+                    }
                 }
                 
                 statusText.textContent = `Camera active - ${useFrontCamera ? 'Face marking mode' : 'Recording mode'}`;
@@ -840,7 +807,7 @@
             };
             
             faces.forEach(face => {
-                // Estimate full body area (face is about 1/7th of body height)
+                // Estimate full body area
                 const bodyHeight = face.height * 4;
                 const bodyWidth = face.width * 2;
                 const bodyX = face.x - bodyWidth / 2;
@@ -926,51 +893,46 @@
                         
                         faces.push({ x: centerX, y: centerY, width, height, index });
                         
-                        // Draw crosshair at face center
-                        const crosshair = document.createElement('div');
-                        crosshair.className = 'crosshair';
-                        crosshair.style.left = `${centerX}px`;
-                        crosshair.style.top = `${centerY}px`;
-                        
-                        const dot = document.createElement('div');
-                        dot.className = 'dot';
-                        crosshair.appendChild(dot);
-                        
+                        // Check if this face is already locked
                         const isLocked = Array.from(lockedFaces.values()).some(face => 
                             Math.abs(face.data.centerX - centerX) < 50 && 
                             Math.abs(face.data.centerY - centerY) < 50
                         );
                         
-                        if (isLocked) {
-                            crosshair.classList.add('locked');
+                        // Draw crosshair at face center (only show if not in front camera or if not locked)
+                        if (!isFrontCamera || !isLocked) {
+                            const crosshair = document.createElement('div');
+                            crosshair.className = isLocked ? 'crosshair locked' : 'crosshair';
+                            crosshair.style.left = `${centerX}px`;
+                            crosshair.style.top = `${centerY}px`;
+                            
+                            const dot = document.createElement('div');
+                            dot.className = 'dot';
+                            crosshair.appendChild(dot);
+                            
+                            // Only allow tapping to lock in front camera mode
+                            if (isFrontCamera && !isLocked) {
+                                crosshair.addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    lockFace(centerX, centerY, width, height, index);
+                                });
+                            }
+                            
+                            overlay.appendChild(crosshair);
                         }
-                        
-                        crosshair.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            toggleFaceLock(centerX, centerY, width, height, index);
-                        });
-                        
-                        overlay.appendChild(crosshair);
                     });
                     
                     // Apply intelligent framing (only for back camera)
-                    if (!isFrontCamera) {
+                    if (!isFrontCamera && faces.length > 0) {
                         const framing = calculateOptimalFraming(faces);
                         targetZoom = framing.zoom;
                         targetPanX = framing.panX;
                         targetPanY = framing.panY;
-                        
-                        let trackingText = 'Auto Tracking';
-                        if (lockedFaces.size > 0) {
-                            trackingText = `Tracking ${lockedFaces.size} Locked Face${lockedFaces.size > 1 ? 's' : ''}`;
-                        }
-                        trackingMode.textContent = trackingText;
                     } else {
-                        // Front camera: no zoom or pan
+                        // Front camera or no faces: no zoom or pan
                         targetZoom = 1;
                         targetPanX = 0;
                         targetPanY = 0;
-                        trackingMode.textContent = 'Face Marking Mode';
                     }
                     
                 } else {
@@ -979,7 +941,9 @@
                     targetZoom = 1;
                     targetPanX = 0;
                     targetPanY = 0;
-                    trackingMode.textContent = 'Auto Tracking';
+                    if (!isFrontCamera) {
+                        trackingMode.textContent = 'No faces detected';
+                    }
                 }
                 
                 applySmoothTransitions();
@@ -993,55 +957,52 @@
 
         // Apply faster transitions
         function applySmoothTransitions() {
-            // Faster zoom transition
-            const zoomDiff = targetZoom - currentZoom;
-            currentZoom += zoomDiff * 0.2; // Faster transition
-            
-            // Faster pan transition
-            const panXDiff = targetPanX - currentPanX;
-            const panYDiff = targetPanY - currentPanY;
-            currentPanX += panXDiff * 0.2; // Faster transition
-            currentPanY += panYDiff * 0.2;
-            
-            // Apply transformations to video (only for back camera)
+            // Only apply transformations for back camera
             if (!isFrontCamera) {
+                // Faster zoom transition
+                const zoomDiff = targetZoom - currentZoom;
+                currentZoom += zoomDiff * 0.2; // Faster transition
+                
+                // Faster pan transition
+                const panXDiff = targetPanX - currentPanX;
+                const panYDiff = targetPanY - currentPanY;
+                currentPanX += panXDiff * 0.2; // Faster transition
+                currentPanY += panYDiff * 0.2;
+                
+                // Apply transformations to video
                 const scale = currentZoom;
                 const translateX = currentPanX * 50;
                 const translateY = currentPanY * 50;
                 video.style.transform = `scale(${scale}) translate(${translateX}%, ${translateY}%)`;
-            }
-            
-            // Update zoom indicator
-            const zoomPercentage = Math.round(currentZoom * 100);
-            zoomFill.style.width = `${Math.min(100, (currentZoom - 1) * 100)}%`;
-            zoomPercent.textContent = `${zoomPercentage}%`;
-        }
-
-        // Toggle face lock
-        function toggleFaceLock(centerX, centerY, width, height, index) {
-            const existingFaceId = Array.from(lockedFaces.entries()).find(([id, face]) => 
-                Math.abs(face.data.centerX - centerX) < 50 && 
-                Math.abs(face.data.centerY - centerY) < 50
-            )?.[0];
-            
-            if (existingFaceId) {
-                unlockedFace(existingFaceId);
+                
+                // Update zoom indicator
+                const zoomPercentage = Math.round(currentZoom * 100);
+                zoomFill.style.width = `${Math.min(100, (currentZoom - 1) * 100)}%`;
+                zoomPercent.textContent = `${zoomPercentage}%`;
             } else {
-                if (lockedFaces.size < MAX_LOCKED_FACES) {
-                    lockFace(centerX, centerY, width, height, index);
-                } else {
-                    statusText.textContent = `Maximum ${MAX_LOCKED_FACES} faces can be locked`;
-                    setTimeout(() => {
-                        if (stream) statusText.textContent = `Camera active - ${isFrontCamera ? 'Face marking mode' : 'Recording mode'}`;
-                    }, 2000);
-                }
+                // Front camera: ensure no transformations
+                video.style.transform = 'scale(1) translate(0%, 0%)';
+                zoomFill.style.width = '0%';
+                zoomPercent.textContent = '100%';
             }
         }
 
-        // Lock a face
+        // Lock a face (manual marking)
         function lockFace(centerX, centerY, width, height, index) {
+            // Only allow locking in front camera mode
+            if (!isFrontCamera) return;
+            
+            if (lockedFaces.size >= MAX_LOCKED_FACES) {
+                statusText.textContent = `Maximum ${MAX_LOCKED_FACES} faces can be locked`;
+                setTimeout(() => {
+                    if (stream) statusText.textContent = `Camera active - ${isFrontCamera ? 'Face marking mode' : 'Recording mode'}`;
+                }, 2000);
+                return;
+            }
+            
             const faceId = nextFaceId++;
             
+            // Create thumbnail
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
             canvas.width = 100;
@@ -1059,7 +1020,7 @@
             const thumbnail = document.createElement('img');
             thumbnail.className = 'locked-face-thumbnail';
             thumbnail.src = thumbnailUrl;
-            thumbnail.title = 'Click to unlock';
+            thumbnail.title = 'Click to remove';
             
             thumbnail.addEventListener('click', () => {
                 unlockedFace(faceId);
@@ -1074,10 +1035,13 @@
             lockedFacesContainer.appendChild(thumbnail);
             lockedFacesContainer.style.display = 'flex';
             
-            statusText.textContent = 'Face locked - Tracking subject';
+            statusText.textContent = 'Face marked! Switch to rear camera to record';
             setTimeout(() => {
                 if (stream) statusText.textContent = `Camera active - ${isFrontCamera ? 'Face marking mode' : 'Recording mode'}`;
             }, 2000);
+            
+            // Play confirmation sound
+            playBeep(1000, 100);
         }
 
         // Unlock a face
@@ -1091,7 +1055,7 @@
                     lockedFacesContainer.style.display = 'none';
                 }
                 
-                statusText.textContent = 'Face unlocked';
+                statusText.textContent = 'Face removed';
                 setTimeout(() => {
                     if (stream) statusText.textContent = `Camera active - ${isFrontCamera ? 'Face marking mode' : 'Recording mode'}`;
                 }, 2000);
@@ -1108,13 +1072,15 @@
             
             // Draw exactly what's shown in viewfinder
             recordingCtx.save();
-            recordingCtx.translate(recordingCanvas.width / 2, recordingCanvas.height / 2);
-            recordingCtx.scale(currentZoom, currentZoom);
-            recordingCtx.translate(currentPanX * 50, currentPanY * 50);
+            if (!isFrontCamera) {
+                recordingCtx.translate(recordingCanvas.width / 2, recordingCanvas.height / 2);
+                recordingCtx.scale(currentZoom, currentZoom);
+                recordingCtx.translate(currentPanX * 50, currentPanY * 50);
+            }
             recordingCtx.drawImage(
                 video, 
-                -recordingCanvas.width / 2, 
-                -recordingCanvas.height / 2, 
+                isFrontCamera ? 0 : -recordingCanvas.width / 2, 
+                isFrontCamera ? 0 : -recordingCanvas.height / 2, 
                 recordingCanvas.width, 
                 recordingCanvas.height
             );
@@ -1157,7 +1123,12 @@
 
         // Toggle recording - disabled for front camera
         recordButton.addEventListener('click', async () => {
-            if (!stream || isFrontCamera) return;
+            if (!stream) return;
+            
+            if (isFrontCamera) {
+                statusText.textContent = 'Switch to rear camera to record';
+                return;
+            }
             
             if (!isRecording) {
                 // Start countdown then recording
@@ -1168,30 +1139,6 @@
             }
         });
 
-        // Trim last 10 seconds from video
-        async function trimVideo(blob) {
-            return new Promise((resolve) => {
-                // Create a video element to get duration
-                const tempVideo = document.createElement('video');
-                tempVideo.src = URL.createObjectURL(blob);
-                
-                tempVideo.onloadedmetadata = () => {
-                    const duration = tempVideo.duration;
-                    const trimmedDuration = Math.max(0, duration - 10); // Remove last 10 seconds
-                    
-                    // In a real implementation, you would use a video processing library
-                    // For now, we'll simulate the processing and return the original
-                    console.log(`Would trim video from ${duration}s to ${trimmedDuration}s`);
-                    
-                    // Simulate processing delay
-                    setTimeout(() => {
-                        URL.revokeObjectURL(tempVideo.src);
-                        resolve(blob); // Return original for now
-                    }, 2000);
-                };
-            });
-        }
-
         // Start video recording
         async function startRecording() {
             if (isFrontCamera) {
@@ -1200,8 +1147,7 @@
             }
             
             try {
-                video.muted = true;
-                
+                // First, ask for file save location
                 if (!('showSaveFilePicker' in window)) {
                     throw new Error('File System Access API not supported. Please use Chrome or Edge.');
                 }
@@ -1221,13 +1167,13 @@
                         console.error('File picker error:', err);
                     }
                     statusText.textContent = `Camera active - ${isFrontCamera ? 'Face marking mode' : 'Recording mode'}`;
-                    video.muted = false;
                     return;
                 }
                 
+                // Create writable stream to the selected file
                 writableStream = await fileHandle.createWritable();
-                recordedChunks = [];
-                recordingDuration = 0;
+                
+                video.muted = true;
                 
                 // Set up canvas for recording
                 recordingCanvas.width = outerFrame.clientWidth;
@@ -1248,60 +1194,51 @@
                 // High quality recording settings
                 const options = { 
                     mimeType: 'video/webm; codecs=vp9,opus',
-                    videoBitsPerSecond: 100000000 // 100 Mbps
+                    videoBitsPerSecond: 50000000 // 50 Mbps for good quality/performance balance
                 };
                 
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options.mimeType = 'video/webm; codecs=vp8,opus';
-                    options.videoBitsPerSecond = 50000000; // 50 Mbps for VP8
+                    options.videoBitsPerSecond = 25000000; // 25 Mbps for VP8
                 }
                 
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options.mimeType = 'video/webm';
-                    options.videoBitsPerSecond = 25000000; // 25 Mbps as fallback
+                    options.videoBitsPerSecond = 15000000; // 15 Mbps as fallback
                 }
                 
                 mediaRecorder = new MediaRecorder(combinedStream, options);
                 
-                // Store chunks for post-processing
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data && event.data.size > 0) {
-                        recordedChunks.push(event.data);
-                        if (writableStream) {
-                            writableStream.write(event.data);
+                // Stream directly to file
+                mediaRecorder.ondataavailable = async (event) => {
+                    if (event.data && event.data.size > 0 && writableStream) {
+                        try {
+                            await writableStream.write(event.data);
+                        } catch (error) {
+                            console.error('Error writing to file:', error);
+                            statusText.textContent = 'Error writing video file';
+                            stopRecording();
                         }
                     }
                 };
                 
                 mediaRecorder.onstop = async () => {
-                    // Show processing overlay
-                    processingOverlay.style.display = 'flex';
-                    
-                    // Create final blob from all chunks
-                    const fullBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                    
-                    // Trim last 10 seconds
-                    const trimmedBlob = await trimVideo(fullBlob);
-                    
-                    // Save trimmed video
                     if (writableStream) {
-                        await writableStream.seek(0);
-                        await writableStream.write(trimmedBlob);
-                        await writableStream.close();
-                        writableStream = null;
-                        fileHandle = null;
+                        try {
+                            await writableStream.close();
+                            writableStream = null;
+                            fileHandle = null;
+                            
+                            statusText.textContent = 'Video saved successfully';
+                            setTimeout(() => {
+                                if (stream) statusText.textContent = `Camera active - ${isFrontCamera ? 'Face marking mode' : 'Recording mode'}`;
+                            }, 3000);
+                        } catch (error) {
+                            console.error('Error closing file:', error);
+                            statusText.textContent = 'Error saving video file';
+                        }
                     }
-                    
-                    // Hide processing overlay
-                    processingOverlay.style.display = 'none';
-                    
-                    statusText.textContent = 'Video processed and saved successfully';
-                    setTimeout(() => {
-                        if (stream) statusText.textContent = `Camera active - ${isFrontCamera ? 'Face marking mode' : 'Recording mode'}`;
-                    }, 3000);
-                    
                     video.muted = false;
-                    recordedChunks = [];
                 };
                 
                 // Function to draw viewfinder content to canvas
@@ -1337,7 +1274,7 @@
                 
                 updateRecordingTimer();
                 
-                statusText.textContent = 'Recording - High Quality';
+                statusText.textContent = 'Recording - Streaming to file';
                 
             } catch (error) {
                 console.error('Error starting recording:', error);
