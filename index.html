@@ -47,6 +47,7 @@
             object-fit: cover;
             z-index: 1;
             background: #000;
+            transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
         }
 
         #overlay {
@@ -61,11 +62,11 @@
 
         .crosshair {
             position: absolute;
-            width: 50px;
-            height: 50px;
+            width: 60px;
+            height: 60px;
             transform: translate(-50%, -50%);
             pointer-events: auto;
-            opacity: 0.8;
+            opacity: 0.9;
             cursor: pointer;
             transition: all 0.2s ease;
         }
@@ -96,8 +97,8 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 6px;
-            height: 6px;
+            width: 8px;
+            height: 8px;
             background: rgba(255, 255, 255, 0.8);
             border-radius: 50%;
             transform: translate(-50%, -50%);
@@ -498,6 +499,10 @@
         let nextFaceId = 1;
         const MAX_LOCKED_FACES = 10;
 
+        // Face tracking stabilization
+        let facePositions = new Map();
+        const FACE_SMOOTHING = 0.7;
+
         // Performance optimization
         let detectionFrameSkip = 0;
         const DETECTION_INTERVAL = 3;
@@ -596,6 +601,9 @@
                 targetPanY = 0;
                 video.style.transform = 'scale(1) translate(0%, 0%)';
                 
+                // Clear face positions when switching cameras
+                facePositions.clear();
+                
                 // Update UI based on camera mode
                 cameraMode.textContent = useFrontCamera ? 'Front Camera - Face Marking Mode' : 'Rear Camera - Recording Mode';
                 
@@ -641,7 +649,22 @@
             detectFaces();
         }
 
-        // Intelligent framing algorithm - FIXED to prevent shrinking
+        // Get smoothed face position
+        function getSmoothedPosition(faceId, currentX, currentY) {
+            if (!facePositions.has(faceId)) {
+                facePositions.set(faceId, { x: currentX, y: currentY });
+                return { x: currentX, y: currentY };
+            }
+            
+            const prev = facePositions.get(faceId);
+            const smoothedX = prev.x * FACE_SMOOTHING + currentX * (1 - FACE_SMOOTHING);
+            const smoothedY = prev.y * FACE_SMOOTHING + currentY * (1 - FACE_SMOOTHING);
+            
+            facePositions.set(faceId, { x: smoothedX, y: smoothedY });
+            return { x: smoothedX, y: smoothedY };
+        }
+
+        // Intelligent framing algorithm - FIXED Centre Stage
         function calculateOptimalFraming(faces) {
             if (faces.length === 0) return { zoom: 1, panX: 0, panY: 0 };
             
@@ -652,39 +675,42 @@
             };
             
             faces.forEach(face => {
-                // Use face bounds directly (no body estimation to prevent excessive zoom)
-                const faceX = face.x - face.width / 2;
-                const faceY = face.y - face.height / 2;
-                const faceMaxX = face.x + face.width / 2;
-                const faceMaxY = face.y + face.height / 2;
+                // Calculate full body bounds (more conservative)
+                const bodyHeight = face.height * 3.5;
+                const bodyWidth = face.width * 1.8;
+                const bodyX = face.x - bodyWidth / 2;
+                const bodyY = face.y - bodyHeight / 3;
+                const bodyMaxX = bodyX + bodyWidth;
+                const bodyMaxY = bodyY + bodyHeight;
                 
-                bounds.minX = Math.min(bounds.minX, faceX);
-                bounds.maxX = Math.max(bounds.maxX, faceMaxX);
-                bounds.minY = Math.min(bounds.minY, faceY);
-                bounds.maxY = Math.max(bounds.maxY, faceMaxY);
+                bounds.minX = Math.min(bounds.minX, bodyX);
+                bounds.maxX = Math.max(bounds.maxX, bodyMaxX);
+                bounds.minY = Math.min(bounds.minY, bodyY);
+                bounds.maxY = Math.max(bounds.maxY, bodyMaxY);
             });
             
             // Calculate center of the group
             const centerX = (bounds.minX + bounds.maxX) / 2;
             const centerY = (bounds.minY + bounds.maxY) / 2;
             
-            // Calculate required zoom to fit all faces with comfortable padding
+            // Calculate required zoom to fit all bodies
             const boundsWidth = bounds.maxX - bounds.minX;
             const boundsHeight = bounds.maxY - bounds.minY;
             const videoWidth = video.videoWidth;
             const videoHeight = video.videoHeight;
             
-            // Calculate zoom needed to fit the group - more conservative approach
-            const zoomX = videoWidth / (boundsWidth * 1.5); // 50% padding
-            const zoomY = videoHeight / (boundsHeight * 1.5);
-            let zoom = Math.min(zoomX, zoomY, 1.5); // Max 1.5x zoom to prevent excessive zooming
+            // Calculate zoom needed to fit the group with comfortable padding
+            const zoomX = videoWidth / (boundsWidth * 1.3);
+            const zoomY = videoHeight / (boundsHeight * 1.3);
+            let zoom = Math.min(zoomX, zoomY, 1.8);
             
-            // Don't zoom in too much - prioritize showing more context
+            // More conservative zoom for multiple people
             if (faces.length > 1) {
-                zoom = Math.min(zoom, 1.2); // Even more conservative for multiple people
+                zoom = Math.min(zoom, 1.5);
             }
             
-            zoom = Math.max(0.8, Math.min(1.5, zoom)); // Clamp between 0.8x and 1.5x
+            // Ensure we don't zoom in too much
+            zoom = Math.max(0.7, Math.min(1.8, zoom));
             
             // Calculate pan to center the group
             const videoCenterX = videoWidth / 2;
@@ -696,12 +722,12 @@
             
             return {
                 zoom: zoom,
-                panX: Math.max(-0.8, Math.min(0.8, panX)), // Limit pan to prevent black borders
-                panY: Math.max(-0.8, Math.min(0.8, panY))
+                panX: Math.max(-0.7, Math.min(0.7, panX)),
+                panY: Math.max(-0.7, Math.min(0.7, panY))
             };
         }
 
-        // Detect faces and adjust frame - FIXED to only show crosshairs in front camera
+        // Detect faces and adjust frame - FIXED floating crosshairs
         async function detectFaces() {
             if (!isTracking || !model) return;
             
@@ -732,20 +758,30 @@
                         const centerX = x + width / 2;
                         const centerY = y + height / 2;
                         
-                        faces.push({ x: centerX, y: centerY, width, height, index });
+                        // Get smoothed position for stable crosshair
+                        const faceId = `${index}-${centerX.toFixed(0)}-${centerY.toFixed(0)}`;
+                        const smoothedPos = getSmoothedPosition(faceId, centerX, centerY);
+                        
+                        faces.push({ 
+                            x: smoothedPos.x, 
+                            y: smoothedPos.y, 
+                            width, 
+                            height, 
+                            index 
+                        });
                         
                         // ONLY show crosshairs in front camera for manual marking
                         if (isFrontCamera) {
                             // Check if this face is already locked
                             const isLocked = Array.from(lockedFaces.values()).some(face => 
-                                Math.abs(face.data.centerX - centerX) < 50 && 
-                                Math.abs(face.data.centerY - centerY) < 50
+                                Math.abs(face.data.centerX - smoothedPos.x) < 50 && 
+                                Math.abs(face.data.centerY - smoothedPos.y) < 50
                             );
                             
                             const crosshair = document.createElement('div');
                             crosshair.className = isLocked ? 'crosshair locked' : 'crosshair';
-                            crosshair.style.left = `${centerX}px`;
-                            crosshair.style.top = `${centerY}px`;
+                            crosshair.style.left = `${smoothedPos.x}px`;
+                            crosshair.style.top = `${smoothedPos.y}px`;
                             
                             const dot = document.createElement('div');
                             dot.className = 'dot';
@@ -755,7 +791,7 @@
                             if (!isLocked) {
                                 crosshair.addEventListener('click', (e) => {
                                     e.stopPropagation();
-                                    lockFace(centerX, centerY, width, height, index);
+                                    lockFace(smoothedPos.x, smoothedPos.y, width, height, index);
                                 });
                             }
                             
@@ -763,14 +799,37 @@
                         }
                     });
                     
-                    // Apply intelligent framing (only for back camera with marked faces)
-                    if (!isFrontCamera && lockedFaces.size > 0) {
-                        const framing = calculateOptimalFraming(faces);
-                        targetZoom = framing.zoom;
-                        targetPanX = framing.panX;
-                        targetPanY = framing.panY;
+                    // Apply Centre Stage framing (only for back camera)
+                    if (!isFrontCamera && faces.length > 0) {
+                        // Use locked faces if available, otherwise use all faces
+                        const facesToFrame = lockedFaces.size > 0 ? 
+                            faces.filter(face => {
+                                return Array.from(lockedFaces.values()).some(lockedFace => 
+                                    Math.abs(lockedFace.data.centerX - face.x) < 80 && 
+                                    Math.abs(lockedFace.data.centerY - face.y) < 80
+                                );
+                            }) : 
+                            faces;
+                        
+                        if (facesToFrame.length > 0) {
+                            const framing = calculateOptimalFraming(facesToFrame);
+                            targetZoom = framing.zoom;
+                            targetPanX = framing.panX;
+                            targetPanY = framing.panY;
+                            
+                            // Update tracking mode
+                            trackingMode.textContent = lockedFaces.size > 0 ? 
+                                `Tracking ${lockedFaces.size} marked face${lockedFaces.size > 1 ? 's' : ''}` : 
+                                'Auto tracking all faces';
+                        } else {
+                            // No matching faces found, reset to default
+                            targetZoom = 1;
+                            targetPanX = 0;
+                            targetPanY = 0;
+                            trackingMode.textContent = 'No marked faces detected';
+                        }
                     } else {
-                        // Front camera or no marked faces: no zoom or pan
+                        // Front camera or no faces: no zoom or pan
                         targetZoom = 1;
                         targetPanX = 0;
                         targetPanY = 0;
@@ -784,6 +843,8 @@
                     if (!isFrontCamera) {
                         trackingMode.textContent = 'No faces detected';
                     }
+                    // Clear face positions when no faces detected
+                    facePositions.clear();
                 }
                 
                 applySmoothTransitions();
@@ -795,10 +856,10 @@
             animationId = requestAnimationFrame(detectFaces);
         }
 
-        // Apply transitions - FIXED to ensure video always fills frame
+        // Apply transitions - FIXED for stable video frame
         function applySmoothTransitions() {
-            // Only apply transformations for back camera with marked faces
-            if (!isFrontCamera && lockedFaces.size > 0) {
+            // Only apply transformations for back camera
+            if (!isFrontCamera) {
                 // Smooth transitions
                 const zoomDiff = targetZoom - currentZoom;
                 currentZoom += zoomDiff * 0.1;
@@ -809,13 +870,13 @@
                 currentPanY += panYDiff * 0.1;
                 
                 // Apply transformations with limits to prevent black borders
-                const scale = Math.max(0.8, Math.min(1.5, currentZoom));
-                const translateX = Math.max(-40, Math.min(40, currentPanX * 40));
-                const translateY = Math.max(-40, Math.min(40, currentPanY * 40));
+                const scale = Math.max(0.7, Math.min(1.8, currentZoom));
+                const translateX = Math.max(-35, Math.min(35, currentPanX * 35));
+                const translateY = Math.max(-35, Math.min(35, currentPanY * 35));
                 
                 video.style.transform = `scale(${scale}) translate(${translateX}%, ${translateY}%)`;
             } else {
-                // Front camera or no marked faces: ensure no transformations
+                // Front camera: ensure no transformations
                 video.style.transform = 'scale(1) translate(0%, 0%)';
             }
         }
@@ -841,14 +902,14 @@
             canvas.width = 100;
             canvas.height = 100;
             
-            // Calculate face area for thumbnail with padding
+            // Calculate face area for thumbnail
             const scale = 100 / Math.max(width * 1.5, height * 1.5);
             const thumbWidth = width * scale;
             const thumbHeight = height * scale;
             const thumbX = (100 - thumbWidth) / 2;
             const thumbY = (100 - thumbHeight) / 2;
             
-            // Draw face with background context
+            // Draw face with background
             context.fillStyle = '#000';
             context.fillRect(0, 0, 100, 100);
             context.drawImage(
@@ -881,11 +942,6 @@
             setTimeout(() => {
                 statusText.textContent = `Camera active - ${isFrontCamera ? 'Face marking mode' : 'Recording mode'}`;
             }, 2000);
-            
-            // Update tracking mode if we switch to back camera later
-            if (!isFrontCamera) {
-                trackingMode.textContent = `Tracking ${lockedFaces.size} marked face${lockedFaces.size > 1 ? 's' : ''}`;
-            }
             
             // Play confirmation sound
             playBeep(1000, 100);
@@ -924,10 +980,10 @@
             
             // Draw exactly what's shown in viewfinder
             recordingCtx.save();
-            if (!isFrontCamera && lockedFaces.size > 0) {
+            if (!isFrontCamera) {
                 recordingCtx.translate(recordingCanvas.width / 2, recordingCanvas.height / 2);
                 recordingCtx.scale(currentZoom, currentZoom);
-                recordingCtx.translate(currentPanX * 40, currentPanY * 40);
+                recordingCtx.translate(currentPanX * 35, currentPanY * 35);
                 recordingCtx.drawImage(
                     video, 
                     -recordingCanvas.width / 2, 
@@ -1096,20 +1152,16 @@
                     if (!isRecording) return;
                     
                     recordingCtx.save();
-                    if (lockedFaces.size > 0) {
-                        recordingCtx.translate(recordingCanvas.width / 2, recordingCanvas.height / 2);
-                        recordingCtx.scale(currentZoom, currentZoom);
-                        recordingCtx.translate(currentPanX * 40, currentPanY * 40);
-                        recordingCtx.drawImage(
-                            video, 
-                            -recordingCanvas.width / 2, 
-                            -recordingCanvas.height / 2, 
-                            recordingCanvas.width, 
-                            recordingCanvas.height
-                        );
-                    } else {
-                        recordingCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
-                    }
+                    recordingCtx.translate(recordingCanvas.width / 2, recordingCanvas.height / 2);
+                    recordingCtx.scale(currentZoom, currentZoom);
+                    recordingCtx.translate(currentPanX * 35, currentPanY * 35);
+                    recordingCtx.drawImage(
+                        video, 
+                        -recordingCanvas.width / 2, 
+                        -recordingCanvas.height / 2, 
+                        recordingCanvas.width, 
+                        recordingCanvas.height
+                    );
                     recordingCtx.restore();
                     
                     requestAnimationFrame(drawToCanvas);
