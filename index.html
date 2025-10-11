@@ -58,7 +58,7 @@
 
         .controls {
             position: absolute;
-            bottom: 69px;
+            bottom: 30px;
             left: 0;
             width: 100%;
             display: flex;
@@ -167,24 +167,6 @@
             width: 48px;
             height: 48px;
             padding: 10px;
-        }
-
-        .pwa-install {
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(20px);
-            padding: 12px 18px;
-            border-radius: 50px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-
-        .pwa-install:hover {
-            background: rgba(0, 0, 0, 0.8);
         }
 
         .recording-indicator {
@@ -376,6 +358,49 @@
             border: 3px solid rgba(0,0,0,0.5);
         }
 
+        /* Install Toast */
+        .toast {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translate(-50%, 150%);
+            background: rgba(30, 30, 30, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 15px 25px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 2000;
+            transition: transform 0.5s ease-in-out;
+            width: 90%;
+            max-width: 500px;
+        }
+        .toast.visible {
+            transform: translate(-50%, 0);
+        }
+        .toast-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .toast button {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: background-color 0.2s ease;
+        }
+        .toast button#toast-install-btn {
+            background: #48bb78;
+            font-weight: bold;
+        }
+        .toast button:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
         /* Color Grading Filters */
         .grade-noir { filter: grayscale(1) contrast(1.2); }
         .grade-vintage { filter: sepia(0.6) contrast(1.05) brightness(1.05) saturate(1.1); }
@@ -438,9 +463,6 @@
                 <svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
             </button>
             <div class="top-right-controls">
-                <div class="pwa-install" id="installButton" style="display: none;">
-                    <span>⬇️</span> Install
-                </div>
                 <button class="control-btn" id="settings-btn" title="Settings">
                     <svg viewBox="0 0 24 24"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
                 </button>
@@ -462,6 +484,14 @@
             <button class="control-btn" id="capture" title="Capture Photo">
                 <svg viewBox="0 0 24 24"><path d="M12 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-10c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
+        </div>
+
+        <div class="toast" id="install-toast">
+            <span>Install this app for the best experience!</span>
+            <div class="toast-buttons">
+                <button id="toast-dismiss-btn">Later</button>
+                <button id="toast-install-btn">Install</button>
+            </div>
         </div>
     </div>
 
@@ -552,7 +582,6 @@
         const recordButton = document.getElementById('record');
         const recordingIndicator = document.getElementById('recording-indicator');
         const recordingTimer = document.getElementById('recording-timer');
-        const installButton = document.getElementById('installButton');
         const settingsBtn = document.getElementById('settings-btn');
         const settingsModal = document.getElementById('settings-modal');
         const closeSettingsBtn = document.getElementById('close-settings-btn');
@@ -571,6 +600,9 @@
         const focusDistanceSlider = document.getElementById('focus-distance');
         const noiseSuppressionGroup = document.getElementById('noise-suppression-group');
         const noiseSuppressionCheckbox = document.getElementById('noise-suppression');
+        const installToast = document.getElementById('install-toast');
+        const toastInstallBtn = document.getElementById('toast-install-btn');
+        const toastDismissBtn = document.getElementById('toast-dismiss-btn');
 
         // --- APP STATE ---
         let stream = null;
@@ -1095,19 +1127,25 @@
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault();
                 deferredPrompt = e;
-                installButton.style.display = 'flex';
+                installToast.classList.add('visible');
             });
-            installButton.addEventListener('click', async () => {
+
+            toastInstallBtn.addEventListener('click', async () => {
                 if (!deferredPrompt) return;
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') {
-                    installButton.style.display = 'none';
+                    installToast.classList.remove('visible');
                 }
                 deferredPrompt = null;
             });
+
+            toastDismissBtn.addEventListener('click', () => {
+                installToast.classList.remove('visible');
+            });
+
             if (window.matchMedia('(display-mode: standalone)').matches) {
-                installButton.style.display = 'none';
+                installToast.style.display = 'none';
             }
         }
 
