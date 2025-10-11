@@ -1,0 +1,92 @@
+{
+  "categories": [
+    {
+      "title": "I. Basic Camera Shots",
+      "entries": [
+        {
+          "name": "Wide Shot (WS)",
+          "description": "Shows the subject and their environment. Establishes the scene and provides context."
+        },
+        {
+          "name": "Full Shot (FS)",
+          "description": "Frames the character from head to toe, with their full body in the frame."
+        },
+        {
+          "name": "Medium Shot (MS)",
+          "description": "Shows the subject from the waist up. Focuses on the character but still shows some environment."
+        },
+        {
+          "name": "Close-Up (CU)",
+          "description": "Frames a subject's head and shoulders. Used to show detailed facial expressions and emotions."
+        },
+        {
+          "name": "Extreme Close-Up (ECU)",
+          "description": "Frames a single detail, like a person's eyes or mouth, to create intimacy or tension."
+        }
+      ]
+    },
+    {
+      "title": "II. Camera Angles",
+      "entries": [
+        {
+          "name": "Eye-Level",
+          "description": "The most neutral angle, simulating a normal human viewpoint."
+        },
+        {
+          "name": "High-Angle",
+          "description": "The camera looks down on the subject, often making them seem small or vulnerable."
+        },
+        {
+          "name": "Low-Angle",
+          "description": "The camera looks up at the subject, making them appear powerful, heroic, or intimidating."
+        },
+        {
+          "name": "Dutch Angle",
+          "description": "The camera is tilted on its axis, creating a sense of unease, disorientation, or madness."
+        }
+      ]
+    },
+    {
+      "title": "III. Camera Movement",
+      "entries": [
+        {
+          "name": "Pan",
+          "description": "The camera swivels horizontally on a fixed axis. Used to follow a subject or scan a scene."
+        },
+        {
+          "name": "Tilt",
+          "description": "The camera swivels vertically on a fixed axis. Used to look up or down at a subject or object."
+        },
+        {
+          "name": "Dolly / Tracking",
+          "description": "The entire camera moves forward, backward, or alongside the subject on a track or dolly."
+        },
+        {
+          "name": "Crane / Jib",
+          "description": "The camera is mounted on an arm and moves vertically through space for dramatic effect."
+        }
+      ]
+    },
+    {
+      "title": "IV. Composition Rules",
+      "entries": [
+        {
+          "name": "Rule of Thirds",
+          "description": "Divide your frame into a 3x3 grid. Place key points of interest on the intersections or along the lines."
+        },
+        {
+          "name": "Leading Lines",
+          "description": "Use natural lines in the scene (roads, fences, etc.) to guide the viewer's eye to your subject."
+        },
+        {
+          "name": "Framing",
+          "description": "Use elements in the foreground (windows, doorways) to create a natural frame around your subject."
+        },
+        {
+          "name": "Headroom",
+          "description": "The space between the top of a subject's head and the top of the frame. Avoid too much or too little."
+        }
+      ]
+    }
+  ]
+}

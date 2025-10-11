@@ -4,11 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0a0a0a">
-    <meta name="description" content="Professional Centre Stage Camera with AI face tracking">
-    <title>Centre Stage Camera</title>
+    <meta name="description" content="A simple and clean camera app.">
+    <title>Camera</title>
     <link rel="manifest" href="manifest.json">
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -40,10 +38,10 @@
             left: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
             z-index: 1;
             background: #000;
-            transition: transform 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+            transition: filter 0.5s ease-in-out;
         }
 
         .video-container {
@@ -56,117 +54,6 @@
             z-index: 1;
         }
 
-        #overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-            pointer-events: none;
-        }
-
-        .crosshair {
-            position: absolute;
-            width: 50px;
-            height: 50px;
-            transform: translate(-50%, -50%);
-            pointer-events: auto;
-            opacity: 0.9;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .crosshair::before, .crosshair::after {
-            content: '';
-            position: absolute;
-            background: rgba(255, 255, 255, 0.9);
-            box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
-            transition: all 0.3s ease;
-        }
-
-        .crosshair::before {
-            top: 50%;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            transform: translateY(-50%);
-        }
-
-        .crosshair::after {
-            left: 50%;
-            top: 0;
-            height: 100%;
-            width: 2px;
-            transform: translateX(-50%);
-        }
-
-        .crosshair .dot {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 8px;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
-            transition: all 0.3s ease;
-        }
-
-        .crosshair.locked {
-            z-index: 10;
-        }
-
-        .crosshair.locked::before, 
-        .crosshair.locked::after {
-            background: #48bb78;
-            height: 3px;
-            width: 3px;
-        }
-
-        .crosshair.locked .dot {
-            background: #48bb78;
-            width: 10px;
-            height: 10px;
-        }
-
-        .center-guide {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 100px;
-            height: 100px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            z-index: 3;
-            pointer-events: none;
-            opacity: 0.7;
-        }
-
-        .center-guide::before, .center-guide::after {
-            content: '';
-            position: absolute;
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .center-guide::before {
-            top: 50%;
-            left: 0;
-            width: 100%;
-            height: 1px;
-            transform: translateY(-50%);
-        }
-
-        .center-guide::after {
-            left: 50%;
-            top: 0;
-            height: 100%;
-            width: 1px;
-            transform: translateX(-50%);
-        }
-
         .controls {
             position: absolute;
             bottom: 30px;
@@ -174,23 +61,24 @@
             width: 100%;
             display: flex;
             justify-content: center;
+            align-items: center;
             gap: 25px;
             z-index: 10;
         }
 
         .control-btn {
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(30, 30, 30, 0.5);
             backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             color: white;
-            border: none;
-            width: 70px;
-            height: 70px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            width: 65px;
+            height: 65px;
             border-radius: 50%;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.7rem;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             transition: all 0.3s ease;
             outline: none;
@@ -205,24 +93,30 @@
             transform: scale(0.95);
         }
 
-        .control-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
+        .control-btn svg {
+            width: 32px;
+            height: 32px;
+            fill: white;
         }
 
-        .control-btn.recording {
-            background: rgba(220, 53, 69, 0.3);
-            animation: pulse-red 2s infinite;
+        #record {
+            width: 80px;
+            height: 80px;
+        }
+
+        #record.recording .record-icon {
+            display: none;
+        }
+
+        #record:not(.recording) .stop-icon {
+            display: none;
         }
 
         .status-bar {
             position: absolute;
             top: 20px;
-            left: 0;
-            width: 100%;
-            display: flex;
-            justify-content: center;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 10;
         }
 
@@ -251,10 +145,29 @@
             animation: pulse 2s infinite;
         }
 
-        .pwa-install {
+        .top-controls {
             position: absolute;
             top: 20px;
+            left: 20px;
             right: 20px;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .top-right-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        #handbook-btn, #settings-btn {
+            width: 48px;
+            height: 48px;
+            padding: 10px;
+        }
+
+        .pwa-install {
             background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(20px);
             padding: 12px 18px;
@@ -264,7 +177,6 @@
             gap: 8px;
             cursor: pointer;
             transition: all 0.3s ease;
-            z-index: 100;
             font-size: 0.9rem;
             font-weight: 500;
         }
@@ -275,7 +187,7 @@
 
         .recording-indicator {
             position: absolute;
-            top: 20px;
+            top: 80px; /* Adjusted position */
             left: 20px;
             background: rgba(220, 53, 69, 0.8);
             backdrop-filter: blur(20px);
@@ -297,102 +209,181 @@
             animation: pulse 1.5s infinite;
         }
 
-        .locked-faces-container {
-            position: absolute;
-            top: 70px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(20px);
-            padding: 10px;
-            border-radius: 15px;
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            max-width: 120px;
-        }
-
-        .locked-face-thumbnail {
-            width: 60px;
-            height: 60px;
-            border-radius: 8px;
-            object-fit: cover;
-            border: 2px solid transparent;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .locked-face-thumbnail:hover {
-            border-color: #48bb78;
-            transform: scale(1.05);
-        }
-
-        .locked-face-thumbnail.active {
-            border-color: #48bb78;
-            box-shadow: 0 0 10px rgba(72, 187, 120, 0.5);
-        }
-
-        .zoom-indicator {
-            position: absolute;
-            bottom: 110px;
+        /* Panel Styles */
+        .panel-overlay {
+            position: fixed;
+            top: 0;
             left: 0;
             width: 100%;
-            display: flex;
-            justify-content: center;
-            z-index: 10;
-        }
-
-        .zoom-bar {
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(20px);
-            padding: 10px 20px;
-            border-radius: 50px;
-            font-size: 0.9rem;
-            display: flex;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            display: none; /* Hidden by default */
             align-items: center;
-            gap: 12px;
+            justify-content: center;
         }
 
-        .zoom-level {
-            width: 100px;
+        .panel-content {
+            background: #1e1e1e;
+            padding: 25px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+        }
+
+        .panel-content h2 {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 2rem;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .settings-group {
+            margin-bottom: 20px;
+        }
+
+        .settings-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+        }
+
+        .settings-group select {
+            width: 100%;
+            padding: 12px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 1rem;
+        }
+
+        .settings-group input[type="checkbox"] {
+            margin-right: 10px;
+            transform: scale(1.2);
+            accent-color: #48bb78;
+        }
+
+        .settings-group input[type="range"] {
+            width: 100%;
+        }
+
+        .settings-group small {
+            display: block;
+            margin-top: 5px;
+            color: #888;
+            font-size: 0.8rem;
+        }
+
+        /* Handbook Styles */
+        #handbook-content-container details {
+            background: #2c2c2c;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        #handbook-content-container summary {
+            padding: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            outline: none;
+        }
+        #handbook-content-container .handbook-entry {
+            padding: 0 15px 15px 15px;
+            border-top: 1px solid #444;
+        }
+        #handbook-content-container .handbook-entry h4 {
+            margin-top: 15px;
+            color: #48bb78;
+        }
+        #handbook-content-container .handbook-entry p {
+            color: #ccc;
+            line-height: 1.6;
+        }
+
+        /* Focus Slider */
+        .focus-slider-container {
+            position: absolute;
+            left: 30px;
+            top: 50%;
+            width: 240px;
+            height: 40px;
+            transform-origin: 0 0;
+            transform: rotate(-90deg) translateX(-50%);
+            z-index: 11;
+            display: none; /* Hide completely if not supported */
+            opacity: 0.3; /* Faded by default */
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .focus-slider-container.supported {
+            display: block; /* Show if feature is supported */
+        }
+
+        .focus-slider-container.visible {
+            opacity: 1; /* Fully visible and interactive in manual mode */
+            pointer-events: all;
+        }
+
+        #focus-distance {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
             height: 4px;
             background: rgba(255, 255, 255, 0.3);
             border-radius: 2px;
-            overflow: hidden;
+            outline: none;
+            margin: 0;
+            padding: 0;
+            cursor: pointer;
         }
 
-        .zoom-fill {
-            height: 100%;
+        #focus-distance::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 30px;
+            height: 30px;
             background: #fff;
-            width: 30%;
-            transition: width 0.5s ease;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid rgba(0,0,0,0.5);
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
         }
 
-        .face-count {
-            position: absolute;
-            top: 70px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(20px);
-            padding: 8px 16px;
-            border-radius: 50px;
-            font-size: 0.85rem;
-            z-index: 10;
-            font-weight: 500;
+        #focus-distance::-moz-range-thumb {
+            width: 30px;
+            height: 30px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid rgba(0,0,0,0.5);
         }
 
-        .tracking-mode {
-            position: absolute;
-            top: 110px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(20px);
-            padding: 8px 16px;
-            border-radius: 50px;
-            font-size: 0.85rem;
-            z-index: 10;
-            font-weight: 500;
-        }
+        /* Color Grading Filters */
+        .grade-noir { filter: grayscale(1) contrast(1.2); }
+        .grade-vintage { filter: sepia(0.6) contrast(1.05) brightness(1.05) saturate(1.1); }
+        .grade-bleach-bypass { filter: contrast(1.4) saturate(0.5); }
+        .grade-teal-orange { filter: contrast(1.05) saturate(1.2) sepia(.2) hue-rotate(-10deg); }
+        .grade-matrix { filter: grayscale(1) contrast(1.2) brightness(0.9) sepia(1) hue-rotate(60deg) saturate(2.5); }
+        .grade-kgf { filter: contrast(1.5) saturate(0.6) sepia(0.4) brightness(0.9); }
+        .grade-salaar { filter: contrast(1.4) saturate(0.3) brightness(0.95) sepia(0.1) hue-rotate(10deg); }
+        .grade-empuraan { filter: contrast(1.6) brightness(0.85) saturate(1.5) sepia(0.3) hue-rotate(-20deg); }
+        .grade-meiyazhagan { filter: contrast(0.95) saturate(1.1) brightness(1.05) sepia(0.1); }
 
         @keyframes pulse {
             0% { opacity: 1; }
@@ -400,70 +391,12 @@
             100% { opacity: 1; }
         }
 
-        @keyframes pulse-red {
-            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
-        }
-
-        /* Portrait to landscape adaptation */
-        @media (orientation: landscape) {
-            .center-guide {
-                width: 120px;
-                height: 120px;
-            }
-            
-            .controls {
-                bottom: 20px;
-            }
-            
-            .zoom-indicator {
-                bottom: 90px;
-            }
-            
-            .locked-faces-container {
-                top: 20px;
-                right: 150px;
-            }
-        }
-
-        /* Mobile optimizations */
-        @media (max-width: 768px) {
-            .control-btn {
-                width: 65px;
-                height: 65px;
-                font-size: 1.5rem;
-            }
-            
-            .status {
-                padding: 10px 20px;
-            }
-            
-            .zoom-bar {
-                padding: 8px 16px;
-            }
-            
-            .locked-faces-container {
-                top: 120px;
-                right: 10px;
-                max-width: 100px;
-            }
-            
-            .locked-face-thumbnail {
-                width: 50px;
-                height: 50px;
-            }
-        }
-
         /* Hide UI elements when in fullscreen and no interaction */
         .container.ui-hidden .status-bar,
         .container.ui-hidden .controls,
-        .container.ui-hidden .pwa-install,
-        .container.ui-hidden .zoom-indicator,
-        .container.ui-hidden .face-count,
+        .container.ui-hidden .top-controls,
         .container.ui-hidden .recording-indicator,
-        .container.ui-hidden .locked-faces-container,
-        .container.ui-hidden .tracking-mode {
+        .container.ui-hidden .focus-slider-container {
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.5s ease;
@@ -471,111 +404,191 @@
 
         .container:not(.ui-hidden) .status-bar,
         .container:not(.ui-hidden) .controls,
-        .container:not(.ui-hidden) .pwa-install,
-        .container:not(.ui-hidden) .zoom-indicator,
-        .container:not(.ui-hidden) .face-count,
+        .container:not(.ui-hidden) .top-controls,
         .container:not(.ui-hidden) .recording-indicator,
-        .container:not(.ui-hidden) .locked-faces-container,
-        .container:not(.ui-hidden) .tracking-mode {
+        .container:not(.ui-hidden) .focus-slider-container.visible {
             opacity: 1;
             transition: opacity 0.5s ease;
         }
     </style>
 </head>
+
 <body>
     <div class="container" id="container">
         <div class="video-container">
             <video id="video" autoplay playsinline muted></video>
         </div>
-        <div id="overlay"></div>
-        <div class="center-guide"></div>
-        
+
         <div class="status-bar">
             <div class="status">
                 <div class="status-dot" id="status-dot"></div>
                 <span id="status-text">Initializing...</span>
             </div>
         </div>
-        
+
         <div class="recording-indicator" id="recording-indicator" style="display: none;">
             <div class="recording-dot"></div>
-            <span id="recording-timer">Recording 00:00</span>
+            <span id="recording-timer">00:00</span>
         </div>
-        
-        <div class="face-count">
-            <span id="face-count">Faces: 0</span>
-        </div>
-        
-        <div class="tracking-mode">
-            <span id="tracking-mode">Auto Tracking</span>
-        </div>
-        
-        <div class="locked-faces-container" id="locked-faces-container" style="display: none;">
-            <!-- Locked face thumbnails will be added here -->
-        </div>
-        
-        <div class="zoom-indicator">
-            <div class="zoom-bar">
-                <span>Zoom</span>
-                <div class="zoom-level">
-                    <div class="zoom-fill" id="zoom-fill"></div>
+
+        <div class="top-controls">
+            <button class="control-btn" id="handbook-btn" title="Filmmaking Handbook">
+                <svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
+            </button>
+            <div class="top-right-controls">
+                <div class="pwa-install" id="installButton" style="display: none;">
+                    <span>⬇️</span> Install
                 </div>
-                <span id="zoom-percent">100%</span>
+                <button class="control-btn" id="settings-btn" title="Settings">
+                    <svg viewBox="0 0 24 24"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
+                </button>
             </div>
         </div>
-        
+
+        <div class="focus-slider-container" id="focus-slider-container">
+            <input type="range" id="focus-distance" min="0" max="1" step="0.01">
+        </div>
+
         <div class="controls">
-            <button class="control-btn" id="toggle-camera">
-                <span>🔄</span>
+            <button class="control-btn" id="toggle-camera" title="Switch Camera">
+                <svg viewBox="0 0 24 24"><path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5L18.5 12 15 15.5z"/></svg>
             </button>
-            <button class="control-btn" id="capture">
-                <span>📸</span>
+            <button class="control-btn" id="record" title="Record Video">
+                <svg class="record-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#ff4545"/></svg>
+                <svg class="stop-icon" viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1" fill="#ff4545"/></svg>
             </button>
-            <button class="control-btn" id="record">
-                <span>⏺️</span>
+            <button class="control-btn" id="capture" title="Capture Photo">
+                <svg viewBox="0 0 24 24"><path d="M12 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-10c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
         </div>
-        
-        <div class="pwa-install" id="installButton" style="display: none;">
-            <span>⬇️</span> Install
+    </div>
+
+    <!-- Handbook Panel -->
+    <div class="panel-overlay" id="handbook-panel">
+        <div class="panel-content">
+            <button class="close-btn" id="close-handbook-btn">&times;</button>
+            <h2>Filmmaking Handbook</h2>
+            <div id="handbook-content-container"></div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="panel-overlay" id="settings-modal">
+        <div class="panel-content">
+            <button class="close-btn" id="close-settings-btn">&times;</button>
+            <h2>Settings</h2>
+            <div class="settings-group">
+                <label for="aspect-ratio">Aspect Ratio</label>
+                <select id="aspect-ratio"></select>
+            </div>
+            <div class="settings-group">
+                <label for="color-grading">Color Grading</label>
+                <select id="color-grading"></select>
+            </div>
+            <div class="settings-group" id="focus-control-group" style="display: none;">
+                <label for="focus-mode">Focus Mode</label>
+                <select id="focus-mode">
+                    <option value="continuous">Continuous Autofocus</option>
+                    <option value="manual">Manual</option>
+                </select>
+            </div>
+            <div class="settings-group" id="video-stabilization-group" style="display: none;">
+                <label for="video-stabilization">Video Stabilization</label>
+                <select id="video-stabilization">
+                    <option value="off">Off</option>
+                    <option value="realtime">Real-time</option>
+                    <option value="cinematic">Cinematic</option>
+                </select>
+            </div>
+            <div class="settings-group" id="noise-suppression-group" style="display: none;">
+                <label for="noise-suppression">
+                    <input type="checkbox" id="noise-suppression">
+                    Noise Suppression
+                </label>
+                <small>(Reduces background audio noise)</small>
+            </div>
+            <div class="settings-group">
+                <label for="apply-grade-to-video">
+                    <input type="checkbox" id="apply-grade-to-video">
+                    Apply Grading to Video
+                </label>
+                <small>(May impact performance)</small>
+            </div>
         </div>
     </div>
 
     <script>
-        // DOM elements
+        // --- CONFIGURATION ---
+        const config = {
+            aspectRatios: [
+                { name: '16:9 (Widescreen TV)', value: 1.7777777778 },
+                { name: '4:3 (Classic TV)', value: 1.3333333333 },
+                { name: '1.85:1 (Cinematic Film)', value: 1.85 },
+                { name: '2.39:1 (Anamorphic Scope)', value: 2.39 }
+            ],
+            colorGradings: [
+                { name: 'None', value: 'none' },
+                { name: 'Empuraan (Fiery Contrast)', value: 'empuraan' },
+                { name: 'Meiyazhagan (Lush Nostalgia)', value: 'meiyazhagan' },
+                { name: 'KGF (Gritty Warmth)', value: 'kgf' },
+                { name: 'Salaar (Cool Despair)', value: 'salaar' },
+                { name: 'Noir', value: 'noir' },
+                { name: 'Vintage', value: 'vintage' },
+                { name: 'Bleach Bypass', value: 'bleach-bypass' },
+                { name: 'Teal & Orange', value: 'teal-orange' },
+                { name: 'Matrix', value: 'matrix' }
+            ]
+        };
+
+        // --- DOM ELEMENTS ---
         const video = document.getElementById('video');
-        const overlay = document.getElementById('overlay');
         const container = document.getElementById('container');
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
-        const faceCount = document.getElementById('face-count');
-        const trackingMode = document.getElementById('tracking-mode');
-        const zoomFill = document.getElementById('zoom-fill');
-        const zoomPercent = document.getElementById('zoom-percent');
         const toggleCameraButton = document.getElementById('toggle-camera');
         const captureButton = document.getElementById('capture');
         const recordButton = document.getElementById('record');
         const recordingIndicator = document.getElementById('recording-indicator');
         const recordingTimer = document.getElementById('recording-timer');
-        const lockedFacesContainer = document.getElementById('locked-faces-container');
         const installButton = document.getElementById('installButton');
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const closeSettingsBtn = document.getElementById('close-settings-btn');
+        const aspectRatioSelect = document.getElementById('aspect-ratio');
+        const colorGradingSelect = document.getElementById('color-grading');
+        const applyGradeCheckbox = document.getElementById('apply-grade-to-video');
+        const handbookBtn = document.getElementById('handbook-btn');
+        const handbookPanel = document.getElementById('handbook-panel');
+        const closeHandbookBtn = document.getElementById('close-handbook-btn');
+        const handbookContentContainer = document.getElementById('handbook-content-container');
+        const videoStabilizationGroup = document.getElementById('video-stabilization-group');
+        const videoStabilizationSelect = document.getElementById('video-stabilization');
+        const focusControlGroup = document.getElementById('focus-control-group');
+        const focusModeSelect = document.getElementById('focus-mode');
+        const focusSliderContainer = document.getElementById('focus-slider-container');
+        const focusDistanceSlider = document.getElementById('focus-distance');
+        const noiseSuppressionGroup = document.getElementById('noise-suppression-group');
+        const noiseSuppressionCheckbox = document.getElementById('noise-suppression');
 
-        // App state
+        // --- APP STATE ---
         let stream = null;
-        let model = null;
-        let isTracking = false;
-        let animationId = null;
-        let currentZoom = 1;
-        let targetZoom = 1;
-        let currentPanX = 0;
-        let currentPanY = 0;
-        let targetPanX = 0;
-        let targetPanY = 0;
-        let faceDetected = false;
+        let currentFacingMode = 'environment';
+        let currentAspectRatio = config.aspectRatios[0].value;
+        let currentStabilizationMode = 'off';
+        let currentFocusMode = 'continuous';
+        let currentFocusDistance = 0;
+        let enableNoiseSuppression = false;
+        let applyGradeToVideo = false;
+        let handbookContentLoaded = false;
+        let optimalBitrate = 10000000; // Default bitrate
         let uiTimeout = null;
         let deferredPrompt = null;
-        
-        // Video recording state
+        let wakeLock = null;
+
+        // --- REAL-TIME PROCESSING STATE ---
+        let canvas, canvasCtx, destinationStream, canvasLoopId = null;
+
+        // --- VIDEO RECORDING STATE ---
         let mediaRecorder = null;
         let isRecording = false;
         let recordingStartTime = null;
@@ -583,447 +596,331 @@
         let fileHandle = null;
         let writableStream = null;
 
-        // Face locking system
-        let lockedFaces = new Map(); // Map of faceId -> { data, thumbnail, element, lastSeen }
-        let nextFaceId = 1;
-        const MAX_LOCKED_FACES = 10;
-
-        // Performance optimization
-        let detectionFrameSkip = 0;
-        const DETECTION_INTERVAL = 2; // Reduced for smoother tracking
+        // --- FUNCTIONS ---
 
         // Initialize the app
         async function init() {
             try {
-                statusText.textContent = 'Loading AI model...';
-                
-                // Load the BlazeFace model for face detection
-                model = await blazeface.load();
-                statusText.textContent = 'AI model loaded';
-                
-                // Start the camera
+                detectAndApplyDefaults();
+                populateSelectOptions();
                 await startCamera();
-                
-                // Start face detection
-                startFaceDetection();
-                
-                // Set up PWA installation
                 setupPWA();
-                
-                // Set up UI auto-hide
                 setupUIHide();
-                
+                setupSettings();
+                setupHandbook();
+                setupWakeLock();
             } catch (error) {
                 console.error('Error initializing app:', error);
                 statusText.textContent = 'Error initializing app';
+                statusDot.classList.remove('active');
             }
+        }
+
+        function detectAndApplyDefaults() {
+            const supportedConstraints = navigator.mediaDevices.getSupportedConstraints();
+
+            if (supportedConstraints.noiseSuppression) {
+                console.log('Noise suppression supported. Enabling by default.');
+                enableNoiseSuppression = true;
+                noiseSuppressionCheckbox.checked = true;
+                noiseSuppressionGroup.style.display = 'block';
+            }
+            if (supportedConstraints.videoStabilizationMode) {
+                console.log('Video stabilization control is supported.');
+                videoStabilizationGroup.style.display = 'block';
+            }
+            if (supportedConstraints.focusMode && supportedConstraints.focusDistance) {
+                console.log('Focus control is supported.');
+                focusControlGroup.style.display = 'block';
+                focusSliderContainer.classList.add('supported');
+            }
+        }
+
+        // Populate dropdowns from config
+        function populateSelectOptions() {
+            config.aspectRatios.forEach(ratio => {
+                const option = document.createElement('option');
+                option.value = ratio.value;
+                option.textContent = ratio.name;
+                aspectRatioSelect.appendChild(option);
+            });
+            aspectRatioSelect.value = currentAspectRatio;
+
+            config.colorGradings.forEach(grade => {
+                const option = document.createElement('option');
+                option.value = grade.value;
+                option.textContent = grade.name;
+                colorGradingSelect.appendChild(option);
+            });
         }
 
         // Start camera
         async function startCamera() {
-            try {
-                statusText.textContent = 'Starting camera...';
-                
-                // Try to get user media with preferred constraints
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                const videoConstraints = isMobile ? 
-                    { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } :
-                    { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: 'user' };
-                
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: videoConstraints,
-                    audio: true  // Enable audio for video recording
-                });
-                
-                video.srcObject = stream;
-                video.muted = true; // Mute speakers by default
-                statusText.textContent = 'Camera active - Tracking faces';
-                statusDot.classList.add('active');
-                
-            } catch (error) {
-                console.error('Error accessing camera:', error);
-                statusText.textContent = 'Camera access denied';
+            statusText.textContent = 'Starting camera...';
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
             }
-        }
 
-        // Start face detection loop
-        function startFaceDetection() {
-            if (!model) return;
-            
-            isTracking = true;
-            detectFaces();
-        }
+            const audioConstraints = { noiseSuppression: enableNoiseSuppression };
 
-        // Detect faces and adjust frame
-        async function detectFaces() {
-            if (!isTracking || !model) return;
-            
-            // Skip frames for performance
-            detectionFrameSkip = (detectionFrameSkip + 1) % DETECTION_INTERVAL;
-            if (detectionFrameSkip !== 0) {
-                animationId = requestAnimationFrame(detectFaces);
-                return;
-            }
-            
-            try {
-                // Perform face detection
-                const predictions = await model.estimateFaces(video, false);
-                
-                // Update face count
-                faceCount.textContent = `Faces: ${predictions.length}`;
-                
-                // Clear previous face indicators
-                overlay.innerHTML = '';
-                
-                // Re-identify locked faces
-                updateLockedFaces(predictions);
-                
-                if (predictions.length > 0) {
-                    faceDetected = true;
-                    
-                    let allFaceBounds = {
-                        minX: Infinity, maxX: -Infinity,
-                        minY: Infinity, maxY: -Infinity
-                    };
-                    
-                    predictions.forEach((prediction, index) => {
-                        const [x, y, width, height] = [
-                            prediction.topLeft[0],
-                            prediction.topLeft[1],
-                            prediction.bottomRight[0] - prediction.topLeft[0],
-                            prediction.bottomRight[1] - prediction.topLeft[1]
-                        ];
-                        
-                        const centerX = x + width / 2;
-                        const centerY = y + height / 2;
-                        
-                        // Update bounds for all faces
-                        allFaceBounds.minX = Math.min(allFaceBounds.minX, x);
-                        allFaceBounds.maxX = Math.max(allFaceBounds.maxX, x + width);
-                        allFaceBounds.minY = Math.min(allFaceBounds.minY, y);
-                        allFaceBounds.maxY = Math.max(allFaceBounds.maxY, y + height);
-                        
-                        // Draw professional crosshair indicator
-                        const crosshair = document.createElement('div');
-                        crosshair.className = 'crosshair';
-                        crosshair.style.left = `${centerX}px`;
-                        crosshair.style.top = `${centerY}px`;
-                        
-                        const dot = document.createElement('div');
-                        dot.className = 'dot';
-                        crosshair.appendChild(dot);
-                        
-                        // Check if this face is locked
-                        const isLocked = Array.from(lockedFaces.values()).some(face => 
-                            face.data && Math.abs(face.data.centerX - centerX) < 50 && 
-                            Math.abs(face.data.centerY - centerY) < 50
-                        );
-                        
-                        if (isLocked) {
-                            crosshair.classList.add('locked');
-                        }
-                        
-                        // Add click event to lock/unlock face
-                        crosshair.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            toggleFaceLock(prediction);
-                        });
-                        
-                        overlay.appendChild(crosshair);
-                    });
-                    
-                    // Calculate framing based on locked faces or all faces
-                    let targetBounds;
-                    let trackingText = 'Auto Tracking';
-                    
-                    if (lockedFaces.size > 0) {
-                        // Use locked faces for framing
-                        targetBounds = calculateLockedFacesBounds();
-                        trackingText = `Tracking ${lockedFaces.size} Locked Face${lockedFaces.size > 1 ? 's' : ''}`;
-                    } else {
-                        // Use all detected faces for framing
-                        targetBounds = allFaceBounds;
-                        trackingText = 'Auto Tracking';
-                    }
-                    
-                    trackingMode.textContent = trackingText;
-                    
-                    // Calculate how far the center is from the video center
-                    const boundsCenterX = (targetBounds.minX + targetBounds.maxX) / 2;
-                    const boundsCenterY = (targetBounds.minY + targetBounds.maxY) / 2;
-                    
-                    const videoCenterX = video.videoWidth / 2;
-                    const videoCenterY = video.videoHeight / 2;
-                    
-                    const offsetX = boundsCenterX - videoCenterX;
-                    const offsetY = boundsCenterY - videoCenterY;
-                    
-                    // Calculate target pan (normalized values between -1 and 1)
-                    targetPanX = -offsetX / videoCenterX;
-                    targetPanY = -offsetY / videoCenterY;
-                    
-                    // Calculate target zoom based on bounds size
-                    const boundsWidth = targetBounds.maxX - targetBounds.minX;
-                    const boundsHeight = targetBounds.maxY - targetBounds.minY;
-                    
-                    const zoomX = video.videoWidth / boundsWidth;
-                    const zoomY = video.videoHeight / boundsHeight;
-                    
-                    // Choose the smaller zoom level to fit the whole frame
-                    targetZoom = Math.min(zoomX, zoomY) * 0.6; // 60% of the screen
-                    targetZoom = Math.max(1, Math.min(targetZoom, 3)); // Clamp zoom
-                    
-                } else {
-                    faceDetected = false;
-                    // No faces detected - reset to default view
-                    targetPanX = 0;
-                    targetPanY = 0;
-                    targetZoom = 1;
-                    trackingMode.textContent = 'Auto Tracking';
-                }
-                
-                // Apply smooth transitions to current values
-                applySmoothTransitions();
-                
-            } catch (error) {
-                console.error('Error detecting faces:', error);
-            }
-            
-            // Continue detection loop
-            animationId = requestAnimationFrame(detectFaces);
-        }
-
-        // Re-identify locked faces in the new set of predictions
-        function updateLockedFaces(predictions) {
-            if (lockedFaces.size === 0) return;
-
-            const matchedPredictionIndices = new Set();
-
-            lockedFaces.forEach((face, faceId) => {
-                let bestMatch = null;
-                let minDistance = Infinity;
-
-                predictions.forEach((prediction, index) => {
-                    if (matchedPredictionIndices.has(index)) return;
-
-                    const [x, y] = prediction.topLeft;
-                    const centerX = x + (prediction.bottomRight[0] - x) / 2;
-                    const centerY = y + (prediction.bottomRight[1] - y) / 2;
-
-                    const distance = Math.sqrt(
-                        Math.pow(centerX - face.data.centerX, 2) +
-                        Math.pow(centerY - face.data.centerY, 2)
-                    );
-
-                    if (distance < minDistance && distance < 100) { // 100px threshold
-                        minDistance = distance;
-                        bestMatch = { prediction, index };
-                    }
-                });
-
-                if (bestMatch) {
-                    const [x, y, width, height] = [
-                        bestMatch.prediction.topLeft[0],
-                        bestMatch.prediction.topLeft[1],
-                        bestMatch.prediction.bottomRight[0] - bestMatch.prediction.topLeft[0],
-                        bestMatch.prediction.bottomRight[1] - bestMatch.prediction.topLeft[1]
-                    ];
-                    face.data = {
-                        centerX: x + width / 2,
-                        centerY: y + height / 2,
-                        width,
-                        height
-                    };
-                    face.lastSeen = Date.now();
-                    matchedPredictionIndices.add(bestMatch.index);
-                } else {
-                    // If face not seen for a while, unlock it
-                    if (Date.now() - face.lastSeen > 3000) { // 3 seconds
-                        unlockedFace(faceId);
-                    }
-                }
-            });
-        }
-
-        // Calculate bounds for all locked faces to include full figure
-        function calculateLockedFacesBounds() {
-            const bounds = {
-                minX: Infinity, maxX: -Infinity,
-                minY: Infinity, maxY: -Infinity
+            const videoConstraints = {
+                width: { ideal: 10000 }, // Aim for max resolution
+                height: { ideal: 10000 },
+                aspectRatio: { exact: currentAspectRatio },
+                facingMode: currentFacingMode
             };
-            
-            lockedFaces.forEach(face => {
-                // Estimate full body bounds (face is about 1/7th of body height)
-                const bodyHeight = face.data.height * 7;
-                const bodyWidth = bodyHeight / 2; // Aspect ratio of a person
-                
-                const bodyX = face.data.centerX - bodyWidth / 2;
-                const bodyY = face.data.centerY - face.data.height * 1.5; // Position face in upper part
-                
-                bounds.minX = Math.min(bounds.minX, bodyX);
-                bounds.maxX = Math.max(bounds.maxX, bodyX + bodyWidth);
-                bounds.minY = Math.min(bounds.minY, bodyY);
-                bounds.maxY = Math.max(bounds.maxY, bodyY + bodyHeight);
-            });
-            
-            return bounds;
-        }
 
-        // Toggle face lock
-        function toggleFaceLock(prediction) {
-            const [x, y, width, height] = [
-                prediction.topLeft[0],
-                prediction.topLeft[1],
-                prediction.bottomRight[0] - prediction.topLeft[0],
-                prediction.bottomRight[1] - prediction.topLeft[1]
-            ];
-            const centerX = x + width / 2;
-            const centerY = y + height / 2;
+            const supportedConstraints = navigator.mediaDevices.getSupportedConstraints();
+            if (supportedConstraints.videoStabilizationMode && currentStabilizationMode !== 'off') {
+                videoConstraints.videoStabilizationMode = currentStabilizationMode;
+            }
+            if (supportedConstraints.focusMode) {
+                videoConstraints.focusMode = currentFocusMode;
+            }
 
-            const existingFaceId = Array.from(lockedFaces.entries()).find(([id, face]) => 
-                face.data && Math.abs(face.data.centerX - centerX) < 50 && 
-                Math.abs(face.data.centerY - centerY) < 50
-            )?.[0];
-            
-            if (existingFaceId) {
-                unlockedFace(existingFaceId);
+            const finalConstraints = { video: videoConstraints, audio: audioConstraints };
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(finalConstraints);
+            } catch (error) {
+                console.error(`Constraint failed: ${error.name}`, error);
+                alert(`A camera setting may not be fully supported. The app will use the closest available setting.`);
+                delete finalConstraints.video.aspectRatio.exact;
+                finalConstraints.video.aspectRatio.ideal = currentAspectRatio;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(finalConstraints);
+                } catch (fallbackError) {
+                    console.error('Fallback camera start failed:', fallbackError);
+                    statusText.textContent = 'Camera failed to start.';
+                    return;
+                }
+            }
+
+            const settings = stream.getVideoTracks()[0].getSettings();
+            const width = settings.width;
+
+            if (width >= 3840) {
+                optimalBitrate = 40000000; // 40 Mbps for 4K
+            } else if (width >= 1920) {
+                optimalBitrate = 15000000; // 15 Mbps for 1080p
+            } else if (width >= 1280) {
+                optimalBitrate = 8000000;  // 8 Mbps for 720p
             } else {
-                if (lockedFaces.size < MAX_LOCKED_FACES) {
-                    lockFace(prediction);
+                optimalBitrate = 4000000;  // 4 Mbps for lower resolutions
+            }
+            console.log(`Camera started with resolution ${width}x${settings.height}. Optimal bitrate set to ${optimalBitrate / 1000000} Mbps.`);
+
+            video.srcObject = stream;
+            video.muted = true;
+            video.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+
+            statusDot.classList.add('active');
+            statusText.textContent = 'Ready';
+        }
+
+        function setupSettings() {
+            // --- Event Listeners ---
+            settingsBtn.addEventListener('click', () => {
+                settingsModal.style.display = 'flex';
+            });
+
+            closeSettingsBtn.addEventListener('click', () => {
+                settingsModal.style.display = 'none';
+            });
+
+            settingsModal.addEventListener('click', (e) => {
+                if (e.target === settingsModal) {
+                    settingsModal.style.display = 'none';
+                }
+            });
+
+            aspectRatioSelect.addEventListener('change', async () => {
+                currentAspectRatio = parseFloat(aspectRatioSelect.value);
+                await startCamera();
+            });
+
+            colorGradingSelect.addEventListener('change', () => {
+                const selectedGrade = colorGradingSelect.value;
+                video.classList.forEach(className => {
+                    if (className.startsWith('grade-')) {
+                        video.classList.remove(className);
+                    }
+                });
+                if (selectedGrade !== 'none') {
+                    video.classList.add(`grade-${selectedGrade}`);
+                }
+            });
+
+            applyGradeCheckbox.addEventListener('change', () => {
+                applyGradeToVideo = applyGradeCheckbox.checked;
+            });
+
+            videoStabilizationSelect.addEventListener('change', async () => {
+                currentStabilizationMode = videoStabilizationSelect.value;
+                await startCamera();
+            });
+
+            focusModeSelect.addEventListener('change', async () => {
+                currentFocusMode = focusModeSelect.value;
+                if (currentFocusMode === 'manual') {
+                    focusSliderContainer.classList.add('visible');
                 } else {
-                    statusText.textContent = `Maximum ${MAX_LOCKED_FACES} faces can be locked`;
-                    setTimeout(() => {
-                        if (stream) statusText.textContent = 'Camera active - Tracking faces';
-                    }, 2000);
+                    focusSliderContainer.classList.remove('visible');
+                }
+                await startCamera(); 
+            });
+
+            focusDistanceSlider.addEventListener('input', () => {
+                currentFocusDistance = parseFloat(focusDistanceSlider.value);
+                applyFocusSettings();
+            });
+
+            noiseSuppressionCheckbox.addEventListener('change', async () => {
+                enableNoiseSuppression = noiseSuppressionCheckbox.checked;
+                await startCamera();
+            });
+        }
+
+        async function applyFocusSettings() {
+            if (!stream || currentFocusMode !== 'manual') return;
+            const track = stream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities();
+            
+            if (capabilities.focusDistance) {
+                const min = capabilities.focusDistance.min || 0;
+                const max = capabilities.focusDistance.max || 1;
+                const scaledDistance = min + (currentFocusDistance * (max - min));
+                
+                try {
+                    await track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: scaledDistance }] });
+                } catch (error) {
+                    console.error("Failed to apply focus distance:", error);
                 }
             }
         }
 
-        // Lock a face
-        function lockFace(prediction) {
-            const faceId = nextFaceId++;
-            
-            const [x, y, width, height] = [
-                prediction.topLeft[0],
-                prediction.topLeft[1],
-                prediction.bottomRight[0] - prediction.topLeft[0],
-                prediction.bottomRight[1] - prediction.topLeft[1]
-            ];
-            const centerX = x + width / 2;
-            const centerY = y + height / 2;
-
-            // Create thumbnail
-            const canvas = document.createElement('canvas');
-            canvas.width = 100;
-            canvas.height = 100;
-            const context = canvas.getContext('2d');
-            context.drawImage(video, x, y, width, height, 0, 0, 100, 100);
-            const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.8);
-            
-            // Create thumbnail element
-            const thumbnail = document.createElement('img');
-            thumbnail.className = 'locked-face-thumbnail';
-            thumbnail.src = thumbnailUrl;
-            thumbnail.title = 'Click to unlock';
-            
-            thumbnail.addEventListener('click', () => {
-                unlockedFace(faceId);
-            });
-            
-            // Store face data
-            lockedFaces.set(faceId, {
-                data: { centerX, centerY, width, height },
-                thumbnail: thumbnailUrl,
-                element: thumbnail,
-                lastSeen: Date.now()
-            });
-            
-            // Update UI
-            lockedFacesContainer.appendChild(thumbnail);
-            lockedFacesContainer.style.display = 'flex';
-            
-            statusText.textContent = 'Face locked - Tracking subject';
-            setTimeout(() => {
-                if (stream) statusText.textContent = 'Camera active - Tracking faces';
-            }, 2000);
-        }
-
-        // Unlock a face
-        function unlockedFace(faceId) {
-            const face = lockedFaces.get(faceId);
-            if (face) {
-                face.element.remove();
-                lockedFaces.delete(faceId);
-                
-                if (lockedFaces.size === 0) {
-                    lockedFacesContainer.style.display = 'none';
+        function setupHandbook() {
+            handbookBtn.addEventListener('click', async () => {
+                if (!handbookContentLoaded) {
+                    try {
+                        const response = await fetch('handbook.json');
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        const data = await response.json();
+                        populateHandbook(data);
+                        handbookContentLoaded = true;
+                    } catch (error) {
+                        console.error('Failed to load handbook data:', error);
+                        handbookContentContainer.innerHTML = '<p>Error: Could not load handbook.</p>';
+                    }
                 }
-                
-                statusText.textContent = 'Face unlocked';
-                setTimeout(() => {
-                    if (stream) statusText.textContent = 'Camera active - Tracking faces';
-                }, 2000);
-            }
+                handbookPanel.style.display = 'flex';
+            });
+
+            closeHandbookBtn.addEventListener('click', () => {
+                handbookPanel.style.display = 'none';
+            });
+
+            handbookPanel.addEventListener('click', (e) => {
+                if (e.target === handbookPanel) {
+                    handbookPanel.style.display = 'none';
+                }
+            });
         }
 
-        // Apply smooth transitions to zoom and pan
-        function applySmoothTransitions() {
-            // Smoother transitions
-            const zoomDiff = targetZoom - currentZoom;
-            currentZoom += zoomDiff * 0.03;
-            
-            const panXDiff = targetPanX - currentPanX;
-            const panYDiff = targetPanY - currentPanY;
-            currentPanX += panXDiff * 0.04;
-            currentPanY += panYDiff * 0.04;
-            
-            // Apply transformations to video
-            const scale = currentZoom;
-            const translateX = currentPanX * (100 / scale);
-            const translateY = currentPanY * (100 / scale);
-            
-            video.style.transform = `scale(${scale}) translate(${translateX}%, ${translateY}%)`;
-            
-            // Update zoom indicator
-            const zoomPercentage = Math.round(currentZoom * 100);
-            zoomFill.style.width = `${Math.min(100, (currentZoom - 1) / 2 * 100)}%`; // Max zoom is 3
-            zoomPercent.textContent = `${zoomPercentage}%`;
+        function populateHandbook(data) {
+            handbookContentContainer.innerHTML = ''; // Clear previous content
+            data.categories.forEach(category => {
+                const details = document.createElement('details');
+                const summary = document.createElement('summary');
+                summary.textContent = category.title;
+                
+                const entryContainer = document.createElement('div');
+                entryContainer.className = 'handbook-entry';
+
+                category.entries.forEach(entry => {
+                    const title = document.createElement('h4');
+                    title.textContent = entry.name;
+                    const description = document.createElement('p');
+                    description.textContent = entry.description;
+                    entryContainer.appendChild(title);
+                    entryContainer.appendChild(description);
+                });
+
+                details.appendChild(summary);
+                details.appendChild(entryContainer);
+                handbookContentContainer.appendChild(details);
+            });
+        }
+
+        function startCanvasProcessing() {
+            if (!stream || canvas) return;
+            const videoTrack = stream.getVideoTracks()[0];
+            const settings = videoTrack.getSettings();
+
+            canvas = document.createElement('canvas');
+            canvas.width = settings.width;
+            canvas.height = settings.height;
+            canvasCtx = canvas.getContext('2d');
+
+            destinationStream = canvas.captureStream();
+            const audioTrack = stream.getAudioTracks()[0];
+            if (audioTrack) {
+                destinationStream.addTrack(audioTrack);
+            }
+
+            function canvasLoop() {
+                if (!isRecording) { // Stop loop if recording stops
+                    stopCanvasProcessing();
+                    return;
+                }
+                canvasCtx.filter = getComputedStyle(video).filter;
+                canvasCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                canvasLoopId = requestAnimationFrame(canvasLoop);
+            }
+            canvasLoopId = requestAnimationFrame(canvasLoop);
+        }
+
+        function stopCanvasProcessing() {
+            if (canvasLoopId) {
+                cancelAnimationFrame(canvasLoopId);
+                canvasLoopId = null;
+            }
+            destinationStream = null;
+            canvas = null;
+            canvasCtx = null;
         }
 
         // Capture photo
         captureButton.addEventListener('click', () => {
             if (!stream) return;
-            
+
             const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            
-            context.save();
-            context.translate(canvas.width / 2, canvas.height / 2);
-            context.scale(currentZoom, currentZoom);
-            const translateX = currentPanX * (canvas.width / currentZoom / 2);
-            const translateY = currentPanY * (canvas.height / currentZoom / 2);
-            context.translate(translateX, translateY);
-            context.drawImage(video, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
-            context.restore();
-            
+            const context = canvas.getContext('2d');
+
+            context.filter = getComputedStyle(video).filter;
+
+            if (currentFacingMode === 'user') {
+                context.translate(canvas.width, 0);
+                context.scale(-1, 1);
+            }
+
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
             const link = document.createElement('a');
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            link.download = `centre-stage-photo-${timestamp}.png`;
+            link.download = `camera-photo-${timestamp}.png`;
             link.href = canvas.toDataURL('image/png', 0.95);
             link.click();
-            
-            statusText.textContent = 'Photo saved to Downloads';
-            setTimeout(() => {
-                if (stream) statusText.textContent = 'Camera active - Tracking faces';
-            }, 2000);
+
+            statusText.textContent = 'Photo saved';
+            setTimeout(() => { statusText.textContent = 'Ready'; }, 2000);
         });
 
         // Toggle recording
         recordButton.addEventListener('click', async () => {
             if (!stream) return;
-            
             if (!isRecording) {
                 await startRecording();
             } else {
@@ -1034,88 +931,42 @@
         // Start video recording
         async function startRecording() {
             try {
-                // Mute audio output during setup
-                video.muted = true;
-
-                // 1. Check for File System Access API
                 if (!('showSaveFilePicker' in window)) {
-                    throw new Error('File System Access API not supported. Please use Chrome or Edge.');
+                    alert('Your browser does not support saving files directly. Please use Chrome or Edge on desktop.');
+                    throw new Error('File System Access API not supported.');
                 }
 
-                // 2. Prompt user for save location
                 statusText.textContent = 'Select save location...';
                 try {
                     fileHandle = await window.showSaveFilePicker({
-                        suggestedName: `centre-stage-video-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`,
-                        types: [{
-                            description: 'WebM Video',
-                            accept: { 'video/webm': ['.webm'] }
-                        }]
+                        suggestedName: `camera-video-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`,
+                        types: [{ description: 'WebM Video', accept: { 'video/webm': ['.webm'] } }]
                     });
                 } catch (err) {
-                    // Handle user cancelling the file picker
                     if (err.name !== 'AbortError') console.error('File picker error:', err);
-                    statusText.textContent = 'Camera active - Tracking faces';
-                    video.muted = false; // Unmute if cancelled
+                    statusText.textContent = 'Ready';
                     return;
                 }
 
-                // 3. Attempt to switch to the back camera
-                statusText.textContent = 'Checking for back camera...';
-                try {
-                    const videoConstraints = {
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
-                        facingMode: 'environment' // Prefer back camera
-                    };
-
-                    const newStream = await navigator.mediaDevices.getUserMedia({
-                        video: videoConstraints,
-                        audio: true
-                    });
-
-                    // If successful, stop the old stream and use the new one
-                    if (stream) {
-                        stream.getTracks().forEach(track => track.stop());
-                    }
-                    stream = newStream;
-                    video.srcObject = stream;
-                    console.log('Successfully switched to back camera.');
-                    statusText.textContent = 'Using back camera';
-                    // Wait for metadata to ensure video dimensions are correct before recording
-                    await new Promise(resolve => video.onloadedmetadata = resolve);
-
-                } catch (error) {
-                    console.warn('Could not switch to back camera, continuing with current camera.', error.name);
-                    statusText.textContent = 'Back camera not found, using front';
-                    // Add a small delay so the user can see the message
-                    await new Promise(resolve => setTimeout(resolve, 1500));
+                let streamToRecord = stream;
+                if (applyGradeToVideo) {
+                    console.log("Applying color grade to video recording.");
+                    startCanvasProcessing();
+                    streamToRecord = destinationStream;
+                } else {
+                    console.log("Recording raw video without color grade.");
                 }
 
-                // 4. Prepare for recording
                 writableStream = await fileHandle.createWritable();
-
-                const options = {
-                    mimeType: 'video/webm; codecs=vp9,opus',
-                    videoBitsPerSecond: 5000000 // Increased bitrate for better quality
-                };
-
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options.mimeType = 'video/webm; codecs=vp8,opus';
-                }
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options.mimeType = 'video/webm';
-                }
-
-                mediaRecorder = new MediaRecorder(stream, options);
+                const options = { mimeType: 'video/webm; codecs=vp9,opus', videoBitsPerSecond: optimalBitrate };
+                mediaRecorder = new MediaRecorder(streamToRecord, options);
 
                 mediaRecorder.ondataavailable = async (event) => {
-                    if (event.data && event.data.size > 0 && writableStream) {
+                    if (event.data.size > 0 && writableStream) {
                         try {
                             await writableStream.write(event.data);
                         } catch (error) {
                             console.error('Error writing to file:', error);
-                            statusText.textContent = 'Error writing video file';
                             stopRecording();
                         }
                     }
@@ -1125,46 +976,28 @@
                     if (writableStream) {
                         try {
                             await writableStream.close();
-                            writableStream = null;
-                            fileHandle = null;
-
-                            statusText.textContent = 'Video saved successfully';
-                            setTimeout(() => {
-                                if (stream) statusText.textContent = 'Camera active - Tracking faces';
-                            }, 3000);
                         } catch (error) {
                             console.error('Error closing file:', error);
-                            statusText.textContent = 'Error saving video file';
                         }
                     }
-                    video.muted = false;
+                    writableStream = null;
+                    fileHandle = null;
+                    statusText.textContent = 'Video saved';
+                    setTimeout(() => { statusText.textContent = 'Ready'; }, 3000);
                 };
 
-                // 5. Start recording
-                mediaRecorder.start(1000); // Collect data in 1-second chunks
+                mediaRecorder.start(1000);
                 isRecording = true;
                 recordingStartTime = Date.now();
 
-                // Update UI to reflect recording state
                 recordButton.classList.add('recording');
-                recordButton.innerHTML = '<span>⏹️</span>';
                 recordingIndicator.style.display = 'flex';
-
                 updateRecordingTimer();
-
                 statusText.textContent = 'Recording...';
 
             } catch (error) {
                 console.error('Error starting recording:', error);
-                statusText.textContent = error.message.includes('File System Access API') ?
-                    'Recording requires Chrome/Edge browser' : 'Error starting recording';
-                video.muted = false;
-                // Clean up resources on failure
-                if (writableStream) {
-                    try { await writableStream.close(); } catch (e) { }
-                    writableStream = null;
-                    fileHandle = null;
-                }
+                statusText.textContent = 'Recording failed';
             }
         }
 
@@ -1173,61 +1006,30 @@
             if (mediaRecorder && isRecording) {
                 mediaRecorder.stop();
                 isRecording = false;
-                
+                if (applyGradeToVideo) {
+                    stopCanvasProcessing();
+                }
                 recordButton.classList.remove('recording');
-                recordButton.innerHTML = '<span>⏺️</span>';
                 recordingIndicator.style.display = 'none';
-                
                 clearInterval(recordingInterval);
-                video.muted = false;
             }
         }
 
         // Update recording timer
         function updateRecordingTimer() {
             if (!isRecording) return;
-            
             const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
             const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
             const seconds = (elapsed % 60).toString().padStart(2, '0');
-            
-            recordingTimer.textContent = `Recording ${minutes}:${seconds}`;
-            
+            recordingTimer.textContent = `${minutes}:${seconds}`;
             recordingInterval = setTimeout(updateRecordingTimer, 1000);
         }
 
         // Toggle camera (front/back if available)
         toggleCameraButton.addEventListener('click', async () => {
             if (!stream) return;
-            
-            stream.getTracks().forEach(track => track.stop());
-            
-            try {
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                const videoConstraints = isMobile ? 
-                    { width: { ideal: 1280 }, height: { ideal: 720 } } :
-                    { width: { ideal: 1920 }, height: { ideal: 1080 } };
-                
-                const currentFacingMode = video.srcObject.getVideoTracks()[0].getSettings().facingMode;
-                videoConstraints.facingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-                
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: videoConstraints,
-                    audio: true
-                });
-                
-                video.srcObject = stream;
-                video.muted = true;
-                
-                if (isRecording) {
-                    stopRecording();
-                    setTimeout(startRecording, 500);
-                }
-                
-            } catch (error) {
-                console.error('Error switching camera:', error);
-                await startCamera();
-            }
+            currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
+            await startCamera();
         });
 
         // Set up UI auto-hide
@@ -1245,68 +1047,84 @@
 
         function hideUIAfterTimeout() {
             uiTimeout = setTimeout(() => {
-                container.classList.add('ui-hidden');
-            }, 3000);
+                if (!isRecording) { // Don't hide controls while recording
+                    container.classList.add('ui-hidden');
+                }
+            }, 4000);
         }
 
-        // PWA Installation
-        function setupPWA() {
+        // PWA Installation & Wake Lock
+        async function setupPWA() {
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault();
                 deferredPrompt = e;
                 installButton.style.display = 'flex';
             });
-
             installButton.addEventListener('click', async () => {
                 if (!deferredPrompt) return;
-                
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
-                
                 if (outcome === 'accepted') {
                     installButton.style.display = 'none';
                 }
-                
                 deferredPrompt = null;
             });
-
             if (window.matchMedia('(display-mode: standalone)').matches) {
-                console.log('App launched in standalone mode');
+                installButton.style.display = 'none';
             }
+        }
+
+        const requestWakeLock = async () => {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Screen Wake Lock was released');
+                    });
+                    console.log('Screen Wake Lock is active');
+                } catch (err) {
+                    console.error(`${err.name}, ${err.message}`);
+                }
+            }
+        };
+
+        const releaseWakeLock = async () => {
+            if (wakeLock !== null) {
+                await wakeLock.release();
+                wakeLock = null;
+            }
+        };
+
+        function setupWakeLock() {
+            requestWakeLock();
+            document.addEventListener('visibilitychange', async () => {
+                if (document.visibilityState === 'visible') {
+                    await requestWakeLock();
+                } else {
+                    await releaseWakeLock();
+                }
+            });
         }
 
         // Service Worker Registration for PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => {
-                        console.log('SW registered: ', registration);
-                    })
-                    .catch(registrationError => {
-                        console.log('SW registration failed: ', registrationError);
-                    });
+                navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW reg failed: ', err));
             });
         }
 
-        // Initialize the app when the page loads
+        // Initialize and clean up
         window.addEventListener('load', init);
-
-        // Clean up when the page is closed
         window.addEventListener('beforeunload', () => {
-            isTracking = false;
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-            }
+            releaseWakeLock();
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
             if (isRecording) {
                 stopRecording();
             }
-            if (recordingInterval) {
-                clearInterval(recordingInterval);
-            }
         });
     </script>
 </body>
+
 </html>
