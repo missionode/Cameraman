@@ -2,7 +2,7 @@
   "name": "Centre Stage Camera",
   "short_name": "CentreStage",
   "description": "A simple and clean camera app with pro features.",
-  "start_url": "Cameraman/index.html",
+  "start_url": "/",
   "display": "fullscreen",
   "background_color": "#000000",
   "theme_color": "#1a202c",
