@@ -58,7 +58,7 @@
 
         .controls {
             position: absolute;
-            bottom: 69px;
+            bottom: 30px;
             left: 0;
             width: 100%;
             display: flex;
@@ -787,6 +787,44 @@
 
             applyGradeCheckbox.addEventListener('change', () => {
                 applyGradeToVideo = applyGradeCheckbox.checked;
+
+                if (applyGradeToVideo) {
+                    if (!stream) return;
+                    console.log("Starting background canvas processing.");
+                    const videoTrack = stream.getVideoTracks()[0];
+                    const settings = videoTrack.getSettings();
+
+                    canvas = document.createElement('canvas');
+                    canvas.width = settings.width;
+                    canvas.height = settings.height;
+                    canvasCtx = canvas.getContext('2d');
+
+                    const canvasVideoTrack = canvas.captureStream(settings.frameRate || 30).getVideoTracks()[0];
+                    const audioTrack = stream.getAudioTracks()[0];
+                    
+                    const tracks = [canvasVideoTrack];
+                    if (audioTrack) {
+                        tracks.push(audioTrack);
+                    }
+                    destinationStream = new MediaStream(tracks);
+
+                    function canvasLoop() {
+                        if (!applyGradeToVideo) return; 
+                        canvasCtx.filter = getComputedStyle(video).filter;
+                        canvasCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        canvasLoopId = requestAnimationFrame(canvasLoop);
+                    }
+                    canvasLoopId = requestAnimationFrame(canvasLoop);
+                } else {
+                    if (canvasLoopId) {
+                        cancelAnimationFrame(canvasLoopId);
+                        canvasLoopId = null;
+                    }
+                    destinationStream = null;
+                    canvas = null;
+                    canvasCtx = null;
+                    console.log("Stopped background canvas processing.");
+                }
             });
 
             videoStabilizationSelect.addEventListener('change', async () => {
@@ -886,44 +924,6 @@
             });
         }
 
-        function startCanvasProcessing() {
-            if (!stream || canvas) return;
-            const videoTrack = stream.getVideoTracks()[0];
-            const settings = videoTrack.getSettings();
-
-            canvas = document.createElement('canvas');
-            canvas.width = settings.width;
-            canvas.height = settings.height;
-            canvasCtx = canvas.getContext('2d');
-
-            destinationStream = canvas.captureStream();
-            const audioTrack = stream.getAudioTracks()[0];
-            if (audioTrack) {
-                destinationStream.addTrack(audioTrack);
-            }
-
-            function canvasLoop() {
-                if (!isRecording) { // Stop loop if recording stops
-                    stopCanvasProcessing();
-                    return;
-                }
-                canvasCtx.filter = getComputedStyle(video).filter;
-                canvasCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                canvasLoopId = requestAnimationFrame(canvasLoop);
-            }
-            canvasLoopId = requestAnimationFrame(canvasLoop);
-        }
-
-        function stopCanvasProcessing() {
-            if (canvasLoopId) {
-                cancelAnimationFrame(canvasLoopId);
-                canvasLoopId = null;
-            }
-            destinationStream = null;
-            canvas = null;
-            canvasCtx = null;
-        }
-
         // Capture photo
         captureButton.addEventListener('click', () => {
             if (!stream) return;
@@ -983,9 +983,8 @@
                 }
 
                 let streamToRecord = stream;
-                if (applyGradeToVideo) {
+                if (applyGradeToVideo && destinationStream) {
                     console.log("Applying color grade to video recording.");
-                    startCanvasProcessing();
                     streamToRecord = destinationStream;
                 } else {
                     console.log("Recording raw video without color grade.");
@@ -1042,9 +1041,7 @@
                 mediaRecorder.stop();
                 playAudioFeedback('stop');
                 isRecording = false;
-                if (applyGradeToVideo) {
-                    stopCanvasProcessing();
-                }
+                // The canvas loop now stops itself, so no need to call stopCanvasProcessing() here.
                 recordButton.classList.remove('recording');
                 recordingIndicator.style.display = 'none';
                 clearInterval(recordingInterval);
