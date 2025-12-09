@@ -1328,8 +1328,14 @@
         // --- RECORDING ---
         recordContainer.onclick = async () => {
             if (!isRecording) {
-                await startRecording();
+                // FALLBACK: If Director Mode is on, clicking button triggers the "Action" sequence
+                if (directorModeEnabled) {
+                    await startRecordingWithCountdown();
+                } else {
+                    await startRecording();
+                }
             } else {
+                // Stop is always immediate for safety on button click
                 stopRecording();
             }
         };
