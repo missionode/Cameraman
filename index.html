@@ -1162,7 +1162,9 @@
                     try {
                         // 1. Request Microphone Permission Explicitly
                         try {
-                            await navigator.mediaDevices.getUserMedia({ audio: true });
+                            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            // [FIX] Immediately release the stream to prevent locking the mic
+                            stream.getTracks().forEach(track => track.stop());
                         } catch (micErr) {
                             console.error("Microphone denied", micErr);
                             alert("Microphone access is required for Voice Commands. Please allow it.");
@@ -1205,7 +1207,7 @@
 
                 recognition.onresult = (event) => {
                     // [FIX] Use resultIndex to get the specific newer result, not just the last one
-                    const result = event.results[event.resultIndex]; 
+                    const result = event.results[event.resultIndex];
                     const transcript = result[0].transcript.trim().toLowerCase();
                     const isFinal = result.isFinal;
 
@@ -1230,7 +1232,7 @@
                         // [FIX] Session Reset: Abort to clear history and force fresh start
                         if (commandTriggered) {
                             console.log("Command triggered, resetting session...");
-                            recognition.abort(); 
+                            recognition.abort();
                         }
                     }
                 };
@@ -1435,6 +1437,8 @@
                 isHandingOverMic = true; // Prevents onend from auto-restarting
                 try { recognition.stop(); } catch (e) { }
                 updateDynamicIsland("Mic Swapping...");
+                // [FIX] Wait for Mic to fully release on Android
+                await new Promise(r => setTimeout(r, 200));
             }
 
             try {
