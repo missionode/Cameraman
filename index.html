@@ -1584,25 +1584,7 @@
                 console.log('PWA was installed');
                 toast.classList.remove('visible');
             });
-            if (!container.innerHTML) {
-                const r = await fetch('handbook.json');
-                const d = await r.json();
-                d.categories.forEach(cat => {
-                    const dl = document.createElement('details');
-                    const s = document.createElement('summary'); s.textContent = cat.title;
-                    dl.appendChild(s);
-                    cat.entries.forEach(e => {
-                        const p = document.createElement('p');
-                        p.innerHTML = `<b>${e.name}</b>: ${e.description}`;
-                        p.style.margin = '8px 0';
-                        dl.appendChild(p);
-                    });
-                    container.appendChild(dl);
-                });
-            }
-        };
-        close.onclick = () => panel.classList.remove('active');
-        panel.onclick = (e) => { if (e.target === panel) panel.classList.remove('active'); };
+
         }
 
         window.addEventListener('load', init);
