@@ -14,10 +14,11 @@
         :root {
             --primary-color: #ffffff;
             --accent-color: #ffd700;
-            --glass-bg: rgba(20, 20, 20, 0.6);
-            --glass-border: rgba(255, 255, 255, 0.1);
-            --blur-amount: 30px;
+            --glass-bg: rgba(30, 30, 30, 0.45);
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --blur-amount: 40px;
             --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
         }
 
         * {
@@ -25,10 +26,10 @@
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
+            font-family: var(--font-family);
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background: #000;
             color: #fff;
             height: 100vh;
@@ -48,32 +49,31 @@
 
         /* --- Viewfinder --- */
         #video,
-        #canvas-output {
+        canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(1);
-            /* Default mirrored handled in JS */
             transition: opacity 0.3s ease;
         }
 
-        /* Hide video when canvas is being used for rendering */
         #video {
+            z-index: 1;
             opacity: 0;
-            /* Hide raw video, show canvas */
+            /* Hide raw video */
         }
 
         #canvas-output {
+            z-index: 2;
             opacity: 1;
         }
 
         /* --- Dynamic Island (Top Bar) --- */
         .dynamic-island-container {
             position: absolute;
-            top: 15px;
+            top: 12px;
             left: 0;
             width: 100%;
             display: flex;
@@ -84,37 +84,37 @@
 
         .dynamic-island {
             background: #000;
-            border-radius: 35px;
-            height: 35px;
+            border-radius: 20px;
+            height: 36px;
             min-width: 120px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 15px;
-            transition: all 0.5s var(--ease-out-expo);
+            padding: 0 12px;
+            transition: all 0.6s var(--ease-out-expo);
             pointer-events: auto;
             color: white;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
             overflow: hidden;
         }
 
         .dynamic-island.recording {
-            width: 180px;
-            background: rgba(40, 0, 0, 1);
+            width: 160px;
+            background: #1c1c1e;
         }
 
         .di-content {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             font-size: 14px;
             font-weight: 500;
             white-space: nowrap;
         }
 
         .di-indicator {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
             background: #4cd964;
             border-radius: 50%;
             transition: background 0.3s ease;
@@ -122,20 +122,22 @@
 
         .dynamic-island.recording .di-indicator {
             background: #ff3b30;
+            box-shadow: 0 0 8px rgba(255, 59, 48, 0.5);
             animation: pulse-red 2s infinite;
         }
 
         .di-timer {
             font-variant-numeric: tabular-nums;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
+            color: #ff3b30;
         }
 
         /* --- Floating Controls (Side Islands) --- */
         .top-controls {
             position: absolute;
-            top: 20px;
+            top: 15px;
             width: 100%;
-            padding: 0 20px;
+            padding: 0 16px;
             display: flex;
             justify-content: space-between;
             z-index: 90;
@@ -148,24 +150,24 @@
             -webkit-backdrop-filter: blur(var(--blur-amount));
             border: 1px solid var(--glass-border);
             height: 44px;
-            border-radius: 22px;
+            width: 44px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0 4px;
             pointer-events: auto;
             transition: transform 0.2s ease, background 0.3s;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
         }
 
         .glass-pill:active {
-            transform: scale(0.96);
-            background: rgba(40, 40, 40, 0.7);
+            transform: scale(0.92);
+            background: rgba(50, 50, 50, 0.6);
         }
 
         .icon-btn {
-            width: 36px;
-            height: 36px;
+            width: 100%;
+            height: 100%;
             border-radius: 50%;
             border: none;
             background: transparent;
@@ -177,9 +179,11 @@
         }
 
         .icon-btn svg {
-            width: 20px;
-            height: 20px;
-            fill: currentColor;
+            width: 22px;
+            height: 22px;
+            fill: white;
+            stroke: white;
+            stroke-width: 0.5px;
         }
 
         /* --- Bottom Controls --- */
@@ -192,57 +196,56 @@
             justify-content: space-around;
             align-items: center;
             z-index: 100;
-            padding: 0 30px;
+            padding: 0 20px;
         }
 
         .control-btn-secondary {
-            width: 50px;
-            height: 50px;
+            width: 56px;
+            height: 56px;
             border-radius: 50%;
-            background: var(--glass-bg);
+            background: rgba(30, 30, 30, 0.5);
             backdrop-filter: blur(var(--blur-amount));
             -webkit-backdrop-filter: blur(var(--blur-amount));
-            border: 1px solid var(--glass-border);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             color: white;
             border: none;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
 
         .control-btn-secondary:active {
-            transform: scale(0.9);
+            transform: scale(0.92);
             background: rgba(60, 60, 60, 0.6);
         }
 
         .control-btn-secondary svg {
-            width: 22px;
-            height: 22px;
+            width: 26px;
+            height: 26px;
             fill: white;
         }
 
         /* --- Shutter Button --- */
         #record-container {
             position: relative;
-            width: 84px;
-            height: 84px;
+            width: 88px;
+            height: 88px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         #record {
-            width: 72px;
-            height: 72px;
+            width: 76px;
+            height: 76px;
             border-radius: 50%;
             background: transparent;
-            border: 4px solid white;
+            border: 5px solid white;
             position: relative;
             cursor: pointer;
-            overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
         #record .inner-circle {
@@ -250,39 +253,43 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 58px;
-            height: 58px;
+            width: 62px;
+            height: 62px;
             border-radius: 50%;
             background: #ff3b30;
-            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
         #record.recording {
-            transform: scale(1.1);
-            border-color: rgba(255, 255, 255, 0.5);
+            border-width: 6px;
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: scale(1.05);
         }
 
         #record.recording .inner-circle {
-            width: 28px;
-            height: 28px;
-            border-radius: 4px;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
         }
 
-        /* --- Focus & Zoom Sliders --- */
+        /* --- Slider --- */
         .slider-container {
             position: absolute;
-            right: 20px;
+            right: 16px;
             top: 50%;
             transform: translateY(-50%);
-            height: 200px;
-            width: 40px;
+            height: 220px;
+            width: 44px;
             z-index: 95;
             display: flex;
-            flex-direction: column;
-            align-items: center;
+            justify-content: center;
+            background: rgba(20, 20, 20, 0.4);
+            backdrop-filter: blur(20px);
+            border-radius: 22px;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s ease;
+            padding: 10px 0;
         }
 
         .slider-container.visible {
@@ -292,47 +299,119 @@
 
         input[type=range][orient=vertical] {
             writing-mode: bt-lr;
-            /* IE/Edge */
             -webkit-appearance: slider-vertical;
-            /* WebKit */
-            width: 8px;
+            width: 100%;
             height: 100%;
-            padding: 0 5px;
+            opacity: 0.8;
         }
 
-        /* --- Panels & Modals --- */
+        /* --- Panels --- */
         .panel-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            z-index: 1000;
+            background: rgba(0, 0, 0, 0.01);
+            /* Transparent logic mostly handled by content */
+            z-index: 2000;
             display: none;
             align-items: center;
             justify-content: center;
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.25s ease;
         }
 
-        .panel-overlay[style*="display: flex"] {
+        .panel-overlay.active {
             opacity: 1;
+            display: flex;
         }
 
         .panel-content {
-            background: rgba(30, 30, 30, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 30px;
-            border-radius: 24px;
-            width: 90%;
-            max-width: 400px;
-            max-height: 80vh;
+            background: rgba(30, 30, 30, 0.75);
+            backdrop-filter: blur(50px) saturate(180%);
+            -webkit-backdrop-filter: blur(50px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 24px;
+            border-radius: 32px;
+            width: 85%;
+            max-width: 360px;
+            max-height: 70vh;
             overflow-y: auto;
             color: white;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+            transform: scale(0.95);
+            transition: transform 0.25s var(--ease-out-expo);
+        }
+
+        .panel-overlay.active .panel-content {
+            transform: scale(1);
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #ccc;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+            letter-spacing: -0.5px;
+        }
+
+        .settings-group {
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 16px;
+        }
+
+        .settings-group:last-child {
+            border-bottom: none;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        select {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            color: white;
+            padding: 10px 12px;
+            border-radius: 12px;
+            font-size: 15px;
+            outline: none;
+            appearance: none;
+        }
+
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: #4cd964;
+        }
+
+        small {
+            color: #888;
+            font-size: 12px;
         }
 
         /* --- Animations --- */
@@ -342,7 +421,7 @@
             }
 
             50% {
-                opacity: 0.5;
+                opacity: 0.6;
             }
 
             100% {
@@ -350,7 +429,6 @@
             }
         }
 
-        /* --- Utilities --- */
         .hidden {
             display: none !important;
         }
@@ -364,12 +442,12 @@
         <video id="video" autoplay playsinline muted></video>
         <canvas id="canvas-output"></canvas>
 
-        <!-- Dynamic Island (Top) -->
+        <!-- Dynamic Island -->
         <div class="dynamic-island-container">
             <div class="dynamic-island" id="dynamic-island">
                 <div class="di-content">
                     <div class="di-indicator" id="di-indicator"></div>
-                    <span id="di-status" style="font-size: 13px;">Ready</span>
+                    <span id="di-status" style="font-size: 13px;">Camera</span>
                 </div>
                 <div class="di-content hidden" id="di-timer-container">
                     <span class="di-timer" id="di-timer">00:00</span>
@@ -377,38 +455,41 @@
             </div>
         </div>
 
-        <!-- Top Controls (Floating Glass) -->
+        <!-- Top Controls -->
         <div class="top-controls">
+            <!-- Handbook: Book Icon -->
             <div class="glass-pill">
                 <button class="icon-btn" id="handbook-btn" title="Handbook">
                     <svg viewBox="0 0 24 24">
                         <path
-                            d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z" />
+                            d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z" />
+                        <path d="M6 7h12v2H6zm0 4h12v2H6zm0 4h8v2H6z" />
                     </svg>
                 </button>
             </div>
 
+            <!-- Settings: Gear Icon (Rounder) -->
             <div class="glass-pill">
                 <button class="icon-btn" id="settings-btn" title="Settings">
                     <svg viewBox="0 0 24 24">
                         <path
-                            d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" />
+                            d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84a.484.484 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.57 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
                     </svg>
                 </button>
             </div>
         </div>
 
-        <!-- Focus/Zoom Slider (Vertical Side) -->
+        <!-- Slider -->
         <div class="slider-container" id="focus-slider-container">
             <input type="range" id="focus-distance" min="0" max="1" step="0.01" orient="vertical">
         </div>
 
         <!-- Bottom Controls -->
         <div class="controls">
+            <!-- Switch Cam: Loop Icon -->
             <button class="control-btn-secondary" id="toggle-camera" title="Switch Camera">
                 <svg viewBox="0 0 24 24">
-                    <path
-                        d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5L18.5 12 15 15.5z" />
+                    <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" />
                 </svg>
             </button>
 
@@ -418,11 +499,11 @@
                 </div>
             </div>
 
+            <!-- Capture: Photo Icon -->
             <button class="control-btn-secondary" id="capture" title="Photo">
                 <svg viewBox="0 0 24 24">
                     <path
-                        d="M12 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-10c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z" />
-                    <circle cx="12" cy="12" r="3" />
+                        d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
                 </svg>
             </button>
         </div>
@@ -436,56 +517,63 @@
         </div>
     </div>
 
-    <!-- Handbook Panel -->
+    <!-- Layouts for Panels (Re-using structures but better styled) -->
     <div class="panel-overlay" id="handbook-panel">
         <div class="panel-content">
             <button class="close-btn" id="close-handbook-btn">&times;</button>
-            <h2>Filmmaking Handbook</h2>
+            <h2>Handbook</h2>
             <div id="handbook-content-container"></div>
         </div>
     </div>
 
-    <!-- Settings Modal -->
     <div class="panel-overlay" id="settings-modal">
         <div class="panel-content">
             <button class="close-btn" id="close-settings-btn">&times;</button>
             <h2>Settings</h2>
+
             <div class="settings-group">
                 <label for="aspect-ratio">Aspect Ratio</label>
                 <select id="aspect-ratio"></select>
             </div>
+
             <div class="settings-group">
                 <label for="color-grading">Color Grading</label>
                 <select id="color-grading"></select>
             </div>
+
+            <!-- Center Stage will be injected here -->
+
+            <div class="settings-group">
+                <label for="apply-grade-to-video" style="justify-content: flex-start; gap: 10px;">
+                    <input type="checkbox" id="apply-grade-to-video">
+                    <span>Grade in Recording</span>
+                </label>
+                <small style="display:block; margin-top:4px;">Apply color effects to saved video.</small>
+            </div>
+
+            <!-- Hidden groups unless supported -->
             <div class="settings-group" id="focus-control-group" style="display: none;">
                 <label for="focus-mode">Focus Mode</label>
                 <select id="focus-mode">
-                    <option value="continuous">Continuous Autofocus</option>
+                    <option value="continuous">Auto</option>
                     <option value="manual">Manual</option>
                 </select>
             </div>
+
             <div class="settings-group" id="video-stabilization-group" style="display: none;">
-                <label for="video-stabilization">Video Stabilization</label>
+                <label for="video-stabilization">Stabilization</label>
                 <select id="video-stabilization">
                     <option value="off">Off</option>
                     <option value="realtime">Real-time</option>
                     <option value="cinematic">Cinematic</option>
                 </select>
             </div>
+
             <div class="settings-group" id="noise-suppression-group" style="display: none;">
-                <label for="noise-suppression">
+                <label for="noise-suppression" style="justify-content: flex-start; gap: 10px;">
                     <input type="checkbox" id="noise-suppression">
-                    Noise Suppression
+                    <span>Noise Suppression</span>
                 </label>
-                <small>(Reduces background audio noise)</small>
-            </div>
-            <div class="settings-group">
-                <label for="apply-grade-to-video">
-                    <input type="checkbox" id="apply-grade-to-video">
-                    Apply Grading to Video
-                </label>
-                <small>(May impact performance)</small>
             </div>
         </div>
     </div>
@@ -516,10 +604,9 @@
 
         // --- DOM ELEMENTS ---
         const video = document.getElementById('video');
-        const canvasOutput = document.getElementById('canvas-output'); // Display canvas
+        const canvasOutput = document.getElementById('canvas-output');
         const container = document.getElementById('container');
 
-        // Dynamic Island
         const dynamicIsland = document.getElementById('dynamic-island');
         const diIndicator = document.getElementById('di-indicator');
         const diStatus = document.getElementById('di-status');
@@ -536,279 +623,68 @@
         const closeSettingsBtn = document.getElementById('close-settings-btn');
         const aspectRatioSelect = document.getElementById('aspect-ratio');
         const colorGradingSelect = document.getElementById('color-grading');
-        const applyGradeCheckbox = document.getElementById('apply-grade-to-video');
-
-        const handbookBtn = document.getElementById('handbook-btn');
-        const handbookPanel = document.getElementById('handbook-panel');
-        const closeHandbookBtn = document.getElementById('close-handbook-btn');
-        const handbookContentContainer = document.getElementById('handbook-content-container');
-
-        const videoStabilizationGroup = document.getElementById('video-stabilization-group');
-        const videoStabilizationSelect = document.getElementById('video-stabilization');
-        const focusControlGroup = document.getElementById('focus-control-group');
-        const focusModeSelect = document.getElementById('focus-mode');
-        const focusSliderContainer = document.getElementById('focus-slider-container');
-        const focusDistanceSlider = document.getElementById('focus-distance');
-        const noiseSuppressionGroup = document.getElementById('noise-suppression-group');
-        const noiseSuppressionCheckbox = document.getElementById('noise-suppression');
-
-        const installToast = document.getElementById('install-toast');
-        const toastInstallBtn = document.getElementById('toast-install-btn');
-        const toastDismissBtn = document.getElementById('toast-dismiss-btn');
 
         // --- APP STATE ---
         let stream = null;
-        let currentFacingMode = 'user'; // Default to user for Center Stage demo
+        let currentFacingMode = 'user';
         let currentAspectRatio = config.aspectRatios[0].value;
-        let currentStabilizationMode = 'off';
-        let currentFocusMode = 'continuous';
-        let currentFocusDistance = 0;
-        let enableNoiseSuppression = false;
-        let applyGradeToVideo = true; // Default to true for the new canvas workflow
-        let handbookContentLoaded = false;
-        let optimalBitrate = 10000000;
-        let uiTimeout = null;
-        let deferredPrompt = null;
-        let wakeLock = null;
-
-        // --- CENTER STAGE STATE ---
         let centerStageEnabled = false;
+        let applyGradeToVideo = true;
+        let isRecording = false;
         let faceLandmarker = null;
         let lastVideoTime = -1;
-        let faces = [];
-        let currentCrop = { x: 0, y: 0, width: 1, height: 1 }; // Normalized (0-1)
+
+        let canvasCtx = canvasOutput.getContext('2d', { willReadFrequently: false, alpha: false });
+        let currentCrop = { x: 0, y: 0, width: 1, height: 1 };
         let targetCrop = { x: 0, y: 0, width: 1, height: 1 };
 
-        // --- REAL-TIME PROCESSING STATE ---
-        let canvasCtx = canvasOutput.getContext('2d', { willReadFrequently: false, alpha: false });
-        let destinationStream, canvasLoopId = null;
-
-        // --- VIDEO RECORDING STATE ---
         let mediaRecorder = null;
-        let isRecording = false;
-        let recordingStartTime = null;
-        let recordingInterval = null;
         let fileHandle = null;
         let recorderWorker = null;
+        let recordingStartTime = 0;
+        let recordingInterval = null;
+        let destinationStream = null;
+        let uiTimeout = null;
 
-        // --- INITIALIZATION ---
         async function init() {
             try {
-                // Initialize Worker
-                recorderWorker = new Worker('recorder.worker.js');
-                recorderWorker.onmessage = (event) => {
-                    if (event.data.type === 'closed') {
-                        updateDynamicIsland('Success', 'Video Saved', 'green');
-                        setTimeout(() => updateDynamicIsland('Ready', '', 'green'), 3000);
-                        fileHandle = null;
-                    } else if (event.data.type === 'error') {
-                        console.error('Worker error:', event.data.error);
-                        updateDynamicIsland('Error', 'Save Failed', 'red');
-                    }
-                };
-
-                detectAndApplyDefaults();
+                // 1. Setup Data & Settings UI immediately
                 populateSelectOptions();
+                setupSettingsUI(); // Ensure listeners are attached
+                setupHandbook();
 
-                // Init MediaPipe asynchronously
+                // 2. Init Worker
+                recorderWorker = new Worker('recorder.worker.js');
+                recorderWorker.onmessage = handleWorkerMessage;
+
+                // 3. Init Camera & Canvas
+                await startCamera();
+                requestAnimationFrame(canvasLoop);
+
+                // 4. Init AI (Background)
                 setupCenterStage();
 
-                await startCamera();
-                setupPWA();
+                // 5. UX
                 setupUIHide();
-                setupSettings();
-                setupHandbook();
-                setupWakeLock();
-                startCanvasLoop(); // Always run canvas loop now
-            } catch (error) {
-                console.error('Error initializing:', error);
-                updateDynamicIsland('Error', 'Init Failed', 'red');
-            }
-        }
 
-        async function setupCenterStage() {
-            try {
-                const filesetResolver = await FilesetResolver.forVisionTasks(
-                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
-                );
-                faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
-                    baseOptions: {
-                        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
-                        delegate: "GPU"
-                    },
-                    runningMode: "VIDEO",
-                    numFaces: 2
-                });
-
-                // Add toggle to settings
-                const div = document.createElement('div');
-                div.className = 'settings-group';
-                div.innerHTML = `
-                    <label for="center-stage-toggle">
-                        <input type="checkbox" id="center-stage-toggle">
-                        Center Stage
-                    </label>
-                    <small>Auto-zoom to keep you in frame</small>
-                `;
-                // Insert after Aspect Ratio
-                aspectRatioSelect.closest('.settings-group').after(div);
-
-                const toggle = document.getElementById('center-stage-toggle');
-                toggle.addEventListener('change', () => {
-                    centerStageEnabled = toggle.checked;
-                    if (!centerStageEnabled) {
-                        targetCrop = { x: 0, y: 0, width: 1, height: 1 }; // Reset zoom
-                    }
-                });
-
-                console.log("Center Stage initialized");
             } catch (e) {
-                console.error("Failed to load Center Stage:", e);
+                console.error("Init failed:", e);
+                updateDynamicIsland("Error", "Init Failed", "red");
             }
         }
 
-        // --- CANVAS RENDER LOOP (The Heart of the App) ---
-        function startCanvasLoop() {
-            const lerp = (start, end, factor) => start + (end - start) * factor;
-
-            async function render() {
-                if (!video || video.paused || video.ended) {
-                    canvasLoopId = requestAnimationFrame(render);
-                    return;
-                }
-
-                // Resize canvas if needed
-                if (canvasOutput.width !== video.videoWidth || canvasOutput.height !== video.videoHeight) {
-                    canvasOutput.width = video.videoWidth;
-                    canvasOutput.height = video.videoHeight;
-                }
-
-                // 1. Center Stage Logic
-                if (centerStageEnabled && faceLandmarker && video.currentTime !== lastVideoTime) {
-                    let startTimeMs = performance.now();
-                    const results = faceLandmarker.detectForVideo(video, startTimeMs);
-                    lastVideoTime = video.currentTime;
-
-                    if (results.detections.length > 0) {
-                        // Calculate bounding box for all faces
-                        let minX = 1, minY = 1, maxX = 0, maxY = 0;
-                        results.detections.forEach(det => {
-                            const box = det.boundingBox; // In pixels
-                            const normX = box.originX / video.videoWidth;
-                            const normY = box.originY / video.videoHeight;
-                            const normW = box.width / video.videoWidth;
-                            const normH = box.height / video.videoHeight;
-
-                            if (normX < minX) minX = normX;
-                            if (normY < minY) minY = normY;
-                            if (normX + normW > maxX) maxX = normX + normW;
-                            if (normY + normH > maxY) maxY = normY + normH;
-                        });
-
-                        // Add padding (20%)
-                        const padding = 0.2;
-                        minX = Math.max(0, minX - padding);
-                        minY = Math.max(0, minY - padding);
-                        maxX = Math.min(1, maxX + padding);
-                        maxY = Math.min(1, maxY + padding);
-
-                        // Calculate target rect
-                        let w = maxX - minX;
-                        let h = maxY - minY;
-
-                        // Enforce aspect ratio of the video
-                        const currentScreenAspect = video.videoWidth / video.videoHeight;
-                        const targetBoxWidth = w * video.videoWidth;
-                        const targetBoxHeight = h * video.videoHeight;
-
-                        let finalW = targetBoxWidth;
-                        let finalH = targetBoxHeight;
-
-                        if (targetBoxWidth / targetBoxHeight > currentScreenAspect) {
-                            // Wider than screen, fit by width
-                            finalH = targetBoxWidth / currentScreenAspect;
-                        } else {
-                            // Taller, fit by height
-                            finalW = targetBoxHeight * currentScreenAspect;
-                        }
-
-                        // Normalize back
-                        w = finalW / video.videoWidth;
-                        h = finalH / video.videoHeight;
-
-                        // Recenter
-                        const centerX = (minX + maxX) / 2;
-                        const centerY = (minY + maxY) / 2;
-
-                        targetCrop = {
-                            x: Math.max(0, Math.min(1 - w, centerX - w / 2)),
-                            y: Math.max(0, Math.min(1 - h, centerY - h / 2)),
-                            width: w,
-                            height: h
-                        };
-
-                    } else {
-                        // No face? slowly zoom out
-                        targetCrop = { x: 0, y: 0, width: 1, height: 1 };
-                    }
-                }
-
-                // Smoothly interpolate currentCrop -> targetCrop
-                const smoothFactor = 0.05; // Adjust for speed
-                currentCrop.x = lerp(currentCrop.x, targetCrop.x, smoothFactor);
-                currentCrop.y = lerp(currentCrop.y, targetCrop.y, smoothFactor);
-                currentCrop.width = lerp(currentCrop.width, targetCrop.width, smoothFactor);
-                currentCrop.height = lerp(currentCrop.height, targetCrop.height, smoothFactor);
-
-                // 2. Draw to Canvas
-                let sx = currentCrop.x * video.videoWidth;
-                let sy = currentCrop.y * video.videoHeight;
-                let sw = currentCrop.width * video.videoWidth;
-                let sh = currentCrop.height * video.videoHeight;
-
-                // Safety checks
-                if (sw <= 0) sw = video.videoWidth;
-                if (sh <= 0) sh = video.videoHeight;
-
-                // Draw Base Video
-                canvasCtx.globalCompositeOperation = 'source-over';
-
-                // Handle mirroring
-                canvasCtx.save();
-                if (currentFacingMode === 'user') {
-                    canvasCtx.translate(canvasOutput.width, 0);
-                    canvasCtx.scale(-1, 1);
-                }
-
-                canvasCtx.drawImage(video, sx, sy, sw, sh, 0, 0, canvasOutput.width, canvasOutput.height);
-                canvasCtx.restore();
-
-                // 3. Apply Color Grading (Optimized Canvas Layers)
-                const currentGrade = colorGradingSelect.value;
-                if (currentGrade !== 'none') {
-                    applyCanvasGrading(canvasCtx, canvasOutput.width, canvasOutput.height, currentGrade);
-                }
-
-                canvasLoopId = requestAnimationFrame(render);
-            }
-            canvasLoopId = requestAnimationFrame(render);
-        }
-
-        // --- UI FUNCTIONS ---
-        function updateDynamicIsland(status, secondaryText = '', color = 'green') {
-            diStatus.textContent = status;
-            diIndicator.style.background = color === 'red' ? '#ff3b30' : '#4cd964';
-
-            if (secondaryText) {
-                diStatus.textContent = `${status} | ${secondaryText}`;
+        function handleWorkerMessage(event) {
+            if (event.data.type === 'closed') {
+                updateDynamicIsland('Success', 'Saved', 'green');
+                setTimeout(() => updateDynamicIsland('Ready'), 3000);
+            } else if (event.data.type === 'error') {
+                updateDynamicIsland('Error', 'Save Failed', 'red');
             }
         }
 
-        // --- CORE FUNCTIONS (Updated for UI) ---
-
-        // Start Camera
+        // --- CORE CAMERA ---
         async function startCamera() {
-            updateDynamicIsland('Starting Camera...');
+            updateDynamicIsland('Loading...');
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
@@ -820,258 +696,304 @@
                     aspectRatio: { ideal: currentAspectRatio },
                     facingMode: currentFacingMode
                 },
-                audio: { noiseSuppression: enableNoiseSuppression }
+                audio: true
             };
 
             try {
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
 
-                // Setup stream for recording (Canvas Stream)
+                // Wait for video to play to get dimensions
+                await new Promise(r => video.onloadedmetadata = r);
+
+                // Setup destination stream for recorder
                 const canvasStream = canvasOutput.captureStream(30);
                 const audioTrack = stream.getAudioTracks()[0];
                 destinationStream = new MediaStream([...canvasStream.getVideoTracks(), ...(audioTrack ? [audioTrack] : [])]);
 
                 updateDynamicIsland('Ready');
-            } catch (error) {
-                console.error("Camera Error", error);
-                updateDynamicIsland('Error', 'Camera Failed', 'red');
-            }
-        }
-
-        // Start Recording
-        async function startRecording() {
-            try {
-                if (!('showSaveFilePicker' in window)) return alert('Browser not supported');
-
-                updateDynamicIsland('Setup', 'Choosing File...');
-                fileHandle = await window.showSaveFilePicker({
-                    suggestedName: `CS-Video-${Date.now()}.webm`,
-                    types: [{ description: 'WebM Video', accept: { 'video/webm': ['.webm'] } }]
-                });
-
-                // Transfer to worker
-                const writable = await fileHandle.createWritable();
-                recorderWorker.postMessage({ type: 'init', payload: { writableStream: writable } }, [writable]);
-
-                const options = { mimeType: 'video/webm; codecs=vp9,opus', videoBitsPerSecond: optimalBitrate };
-                mediaRecorder = new MediaRecorder(destinationStream, options);
-
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) recorderWorker.postMessage({ type: 'write', payload: { data: e.data } });
-                };
-
-                mediaRecorder.onstop = () => recorderWorker.postMessage({ type: 'close' });
-
-                mediaRecorder.start(1000); // 1s chunks
-
-                isRecording = true;
-                recordingStartTime = Date.now();
-
-                // UI Updates
-                dynamicIsland.classList.add('recording');
-                diTimerContainer.classList.remove('hidden');
-                recordBtnInner.classList.add('recording');
-                updateRecordingTimer();
-                updateDynamicIsland('Recording', '', 'red');
-
             } catch (err) {
                 console.error(err);
-                if (err.name !== 'AbortError') updateDynamicIsland('Error', 'Rec Failed', 'red');
-                else updateDynamicIsland('Ready');
+                updateDynamicIsland('Error', 'Camera Access', 'red');
             }
         }
 
-        function stopRecording() {
-            if (mediaRecorder && isRecording) {
-                mediaRecorder.stop();
-                isRecording = false;
+        // --- CENTER STAGE ---
+        async function setupCenterStage() {
+            try {
+                console.log("Loading Center Stage...");
+                const filesetResolver = await FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+                );
+                faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+                    baseOptions: {
+                        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+                        delegate: "GPU"
+                    },
+                    runningMode: "VIDEO",
+                    numFaces: 2
+                });
+                console.log("Center Stage Ready");
 
+                // Inject Toggle ONLY after loaded or if we want to show it disabled
+                injectCenterStageToggle();
+
+            } catch (e) {
+                console.error("Center Stage Load Failed", e);
+            }
+        }
+
+        function injectCenterStageToggle() {
+            const container = document.querySelector('#aspect-ratio').closest('.settings-group');
+            if (!container) return; // Paranoia check
+
+            const div = document.createElement('div');
+            div.className = 'settings-group';
+            div.innerHTML = `
+                <label for="center-stage-toggle" style="justify-content: flex-start; gap: 10px;">
+                    <input type="checkbox" id="center-stage-toggle">
+                    <span>Center Stage</span>
+                </label>
+                <small style="display:block; margin-top:4px;">Auto-zoom to keep faces in frame.</small>
+            `;
+
+            // Insert after Aspect Ratio
+            container.after(div);
+
+            const toggle = document.getElementById('center-stage-toggle');
+            toggle.addEventListener('change', () => {
+                centerStageEnabled = toggle.checked;
+                if (!centerStageEnabled) {
+                    targetCrop = { x: 0, y: 0, width: 1, height: 1 };
+                }
+            });
+        }
+
+        // --- CANVAS LOOP ---
+        function canvasLoop() {
+            if (!video || video.paused || video.ended) {
+                requestAnimationFrame(canvasLoop);
+                return;
+            }
+
+            // Resize
+            if (canvasOutput.width !== video.videoWidth || canvasOutput.height !== video.videoHeight) {
+                canvasOutput.width = video.videoWidth;
+                canvasOutput.height = video.videoHeight;
+            }
+
+            // 1. Face Tracking Math
+            if (centerStageEnabled && faceLandmarker) {
+                processCenterStage();
+            }
+
+            // 2. Interpolate Crop
+            currentCrop.x += (targetCrop.x - currentCrop.x) * 0.05;
+            currentCrop.y += (targetCrop.y - currentCrop.y) * 0.05;
+            currentCrop.width += (targetCrop.width - currentCrop.width) * 0.05;
+            currentCrop.height += (targetCrop.height - currentCrop.height) * 0.05;
+
+            // 3. Draw
+            let sx = currentCrop.x * video.videoWidth;
+            let sy = currentCrop.y * video.videoHeight;
+            let sw = currentCrop.width * video.videoWidth;
+            let sh = currentCrop.height * video.videoHeight;
+
+            canvasCtx.globalCompositeOperation = 'source-over';
+            canvasCtx.save();
+            if (currentFacingMode === 'user') {
+                canvasCtx.translate(canvasOutput.width, 0);
+                canvasCtx.scale(-1, 1);
+            }
+            canvasCtx.drawImage(video, sx, sy, sw, sh, 0, 0, canvasOutput.width, canvasOutput.height);
+            canvasCtx.restore();
+
+            // 4. Color Grade
+            if (colorGradingSelect.value !== 'none') {
+                applyCanvasGrading(canvasCtx, canvasOutput.width, canvasOutput.height, colorGradingSelect.value);
+            }
+
+            requestAnimationFrame(canvasLoop);
+        }
+
+        function processCenterStage() {
+            if (video.currentTime === lastVideoTime) return;
+            const results = faceLandmarker.detectForVideo(video, performance.now());
+            lastVideoTime = video.currentTime;
+
+            if (results.detections.length > 0) {
+                // ... (Same math as previous step) ...
+                let minX = 1, minY = 1, maxX = 0, maxY = 0;
+                results.detections.forEach(d => {
+                    const b = d.boundingBox;
+                    const nx = b.originX / video.videoWidth;
+                    const ny = b.originY / video.videoHeight;
+                    const nw = b.width / video.videoWidth;
+                    const nh = b.height / video.videoHeight;
+                    if (nx < minX) minX = nx;
+                    if (ny < minY) minY = ny;
+                    if (nx + nw > maxX) maxX = nx + nw;
+                    if (ny + nh > maxY) maxY = ny + nh;
+                });
+
+                const padding = 0.25;
+                minX = Math.max(0, minX - padding);
+                minY = Math.max(0, minY - padding);
+                maxX = Math.min(1, maxX + padding);
+                maxY = Math.min(1, maxY + padding);
+
+                let w = maxX - minX;
+                let h = maxY - minY;
+                const screenAspect = video.videoWidth / video.videoHeight;
+
+                // Constrain to Aspect Ratio to avoid stretching
+                // We want the CROP to have the same aspect ratio as the VIDEO
+                // cropW / cropH = screenAspect
+                // if w/h > screenAspect, assume w is master, adjust h
+                if (w / h > screenAspect) {
+                    h = w / screenAspect;
+                } else {
+                    w = h * screenAspect;
+                }
+
+                // Re-clamp centers
+                const cx = (minX + maxX) / 2;
+                const cy = (minY + maxY) / 2;
+
+                targetCrop = {
+                    x: Math.max(0, Math.min(1 - w, cx - w / 2)),
+                    y: Math.max(0, Math.min(1 - h, cy - h / 2)),
+                    width: w,
+                    height: h
+                };
+            } else {
+                targetCrop = { x: 0, y: 0, width: 1, height: 1 };
+            }
+        }
+
+        // --- HELPERS ---
+        function populateSelectOptions() {
+            aspectRatioSelect.innerHTML = '';
+            colorGradingSelect.innerHTML = '';
+            config.aspectRatios.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.value;
+                opt.textContent = r.name;
+                aspectRatioSelect.appendChild(opt);
+            });
+            config.colorGradings.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.value;
+                opt.textContent = g.name;
+                colorGradingSelect.appendChild(opt);
+            });
+        }
+
+        function setupSettingsUI() {
+            // Modal Toggles
+            settingsBtn.onclick = () => {
+                settingsModal.classList.add('active');
+            };
+            closeSettingsBtn.onclick = () => {
+                settingsModal.classList.remove('active');
+            };
+            settingsModal.onclick = (e) => {
+                if (e.target === settingsModal) settingsModal.classList.remove('active');
+            };
+
+            // Listeners
+            aspectRatioSelect.onchange = async () => {
+                currentAspectRatio = parseFloat(aspectRatioSelect.value);
+                await startCamera();
+            };
+
+            document.getElementById('apply-grade-to-video').addEventListener('change', (e) => {
+                applyGradeToVideo = e.target.checked;
+            });
+        }
+
+        function setupUIHide() {
+            let t;
+            const hide = () => {
+                if (!isRecording) {
+                    document.querySelector('.top-controls').classList.add('hidden');
+                    document.querySelector('.controls').classList.add('hidden');
+                }
+            };
+            const show = () => {
+                document.querySelector('.top-controls').classList.remove('hidden');
+                document.querySelector('.controls').classList.remove('hidden');
+                clearTimeout(t);
+                t = setTimeout(hide, 4000);
+            };
+            container.onmousemove = show;
+            container.ontouchstart = show;
+            show();
+        }
+
+        function updateDynamicIsland(text, subtext = '', color = 'green') {
+            diStatus.textContent = text + (subtext ? ` | ${subtext}` : '');
+            diIndicator.style.background = color === 'red' ? '#ff3b30' : '#4cd964';
+        }
+
+        // --- RECORDING ---
+        recordContainer.onclick = async () => {
+            if (!isRecording) {
+                // START
+                try {
+                    fileHandle = await window.showSaveFilePicker({
+                        suggestedName: `video-${Date.now()}.webm`,
+                        types: [{ description: 'WebM Video', accept: { 'video/webm': ['.webm'] } }]
+                    });
+                    const writable = await fileHandle.createWritable();
+                    recorderWorker.postMessage({ type: 'init', payload: { writableStream: writable } }, [writable]);
+
+                    mediaRecorder = new MediaRecorder(destinationStream, { mimeType: 'video/webm; codecs=vp9,opus', videoBitsPerSecond: 10000000 });
+                    mediaRecorder.ondataavailable = e => {
+                        if (e.data.size > 0) recorderWorker.postMessage({ type: 'write', payload: { data: e.data } });
+                    };
+                    mediaRecorder.onstop = () => recorderWorker.postMessage({ type: 'close' });
+
+                    mediaRecorder.start(1000);
+                    isRecording = true;
+                    recordingStartTime = Date.now();
+
+                    dynamicIsland.classList.add('recording');
+                    diTimerContainer.classList.remove('hidden');
+                    recordBtnInner.classList.add('recording');
+                    updateDynamicIsland('Recording', '', 'red');
+                    updateTimer();
+
+                } catch (e) {
+                    console.error(e);
+                }
+            } else {
+                // STOP
+                if (mediaRecorder) mediaRecorder.stop();
+                isRecording = false;
                 dynamicIsland.classList.remove('recording');
                 diTimerContainer.classList.add('hidden');
                 recordBtnInner.classList.remove('recording');
+                updateDynamicIsland('Saving...');
                 clearTimeout(recordingInterval);
-                updateDynamicIsland('Saving...', '', 'green');
             }
-        }
+        };
 
-        function updateRecordingTimer() {
+        function updateTimer() {
             if (!isRecording) return;
-            const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
-            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
-            const seconds = (elapsed % 60).toString().padStart(2, '0');
-            diTimer.textContent = `${minutes}:${seconds}`;
-            recordingInterval = setTimeout(updateRecordingTimer, 1000);
+            const seq = Math.floor((Date.now() - recordingStartTime) / 1000);
+            const m = Math.floor(seq / 60).toString().padStart(2, 0);
+            const s = (seq % 60).toString().padStart(2, 0);
+            diTimer.textContent = `${m}:${s}`;
+            recordingInterval = setTimeout(updateTimer, 1000);
         }
 
-        // --- Event Listeners ---
-        recordContainer.addEventListener('click', async () => {
-            if (!stream) return;
-            if (!isRecording) await startRecording();
-            else stopRecording();
-        });
-
-        toggleCameraButton.addEventListener('click', async () => {
+        toggleCameraButton.onclick = () => {
             currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-            await startCamera();
-        });
-
-        // --- REUSE EXISTING HELPER FUNCTIONS ---
-        function detectAndApplyDefaults() {
-            const supportedConstraints = navigator.mediaDevices.getSupportedConstraints();
-
-            if (supportedConstraints.noiseSuppression) {
-                console.log('Noise suppression supported. Enabling by default.');
-                enableNoiseSuppression = true;
-                noiseSuppressionCheckbox.checked = true;
-                noiseSuppressionGroup.style.display = 'block';
-            }
-            if (supportedConstraints.videoStabilizationMode) {
-                console.log('Video stabilization control is supported.');
-                videoStabilizationGroup.style.display = 'block';
-            }
-            if (supportedConstraints.focusMode && supportedConstraints.focusDistance) {
-                console.log('Focus control is supported.');
-                focusControlGroup.style.display = 'block';
-                focusSliderContainer.classList.add('supported');
-            }
-        }
-        function populateSelectOptions() {
-            config.aspectRatios.forEach(ratio => {
-                const option = document.createElement('option');
-                option.value = ratio.value;
-                option.textContent = ratio.name;
-                aspectRatioSelect.appendChild(option);
-            });
-            aspectRatioSelect.value = currentAspectRatio;
-
-            config.colorGradings.forEach(grade => {
-                const option = document.createElement('option');
-                option.value = grade.value;
-                option.textContent = grade.name;
-                colorGradingSelect.appendChild(option);
-            });
-        }
-        function setupUIHide() {
-            container.addEventListener('mousemove', showUI);
-            container.addEventListener('touchstart', showUI);
-            hideUIAfterTimeout();
-        }
-
-        function showUI() {
-            container.classList.remove('ui-hidden');
-            clearTimeout(uiTimeout);
-            hideUIAfterTimeout();
-        }
-
-        function hideUIAfterTimeout() {
-            uiTimeout = setTimeout(() => {
-                if (!isRecording) { // Don't hide controls while recording
-                    container.classList.add('ui-hidden');
-                }
-            }, 4000);
-        }
-        function setupPWA() {
-            window.addEventListener('beforeinstallprompt', (e) => {
-                e.preventDefault();
-                deferredPrompt = e;
-                installToast.classList.add('visible');
-            });
-
-            toastInstallBtn.addEventListener('click', async () => {
-                if (!deferredPrompt) return;
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    installToast.classList.remove('visible');
-                }
-                deferredPrompt = null;
-            });
-
-            toastDismissBtn.addEventListener('click', () => {
-                installToast.classList.remove('visible');
-            });
-
-            if (window.matchMedia('(display-mode: standalone)').matches) {
-                installToast.style.display = 'none';
-            }
-        }
-        const requestWakeLock = async () => {
-            if ('wakeLock' in navigator) {
-                try {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    wakeLock.addEventListener('release', () => {
-                        console.log('Screen Wake Lock was released');
-                    });
-                    console.log('Screen Wake Lock is active');
-                } catch (err) {
-                    console.error(`${err.name}, ${err.message}`);
-                }
-            }
+            startCamera();
         };
 
-        const releaseWakeLock = async () => {
-            if (wakeLock !== null) {
-                await wakeLock.release();
-                wakeLock = null;
-            }
-        };
-
-        function setupWakeLock() {
-            requestWakeLock();
-            document.addEventListener('visibilitychange', async () => {
-                if (document.visibilityState === 'visible') {
-                    await requestWakeLock();
-                } else {
-                    await releaseWakeLock();
-                }
-            });
-        }
-        function setupSettings() {
-            // Re-attach settings listeners
-            settingsBtn.addEventListener('click', () => settingsModal.style.display = 'flex');
-            closeSettingsBtn.addEventListener('click', () => settingsModal.style.display = 'none');
-            settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) settingsModal.style.display = 'none'; });
-
-            aspectRatioSelect.addEventListener('change', async () => {
-                currentAspectRatio = parseFloat(aspectRatioSelect.value);
-                await startCamera();
-            });
-            // Color Grading handled in canvas loop
-        }
-        function setupHandbook() {
-            handbookBtn.addEventListener('click', async () => {
-                if (!handbookContentLoaded) {
-                    try {
-                        const response = await fetch('handbook.json');
-                        const data = await response.json();
-                        populateHandbook(data);
-                        handbookContentLoaded = true;
-                    } catch (e) { }
-                }
-                handbookPanel.style.display = 'flex';
-            });
-            closeHandbookBtn.addEventListener('click', () => handbookPanel.style.display = 'none');
-        }
-        function populateHandbook(data) {
-            handbookContentContainer.innerHTML = '';
-            data.categories.forEach(cat => {
-                const d = document.createElement('details');
-                const s = document.createElement('summary');
-                s.textContent = cat.title;
-                const div = document.createElement('div');
-                div.className = 'handbook-entry';
-                cat.entries.forEach(entry => {
-                    const h = document.createElement('h4'); h.textContent = entry.name;
-                    const p = document.createElement('p'); p.textContent = entry.description;
-                    div.append(h, p);
-                });
-                d.append(s, div);
-                handbookContentContainer.append(d);
-            });
-        }
-
-        // Canvas Grading Helpers
+        // Reuse grading definitions
         const gradingDefinitions = {
             'noir': [{ mode: 'saturation', color: '#000000' }, { mode: 'overlay', color: 'rgba(0,0,0,0.4)' }, { mode: 'multiply', color: 'rgba(0,0,0,0.2)' }],
             'vintage': [{ mode: 'color', color: 'rgba(112, 66, 20, 0.4)' }, { mode: 'soft-light', color: 'rgba(255, 240, 200, 0.3)' }, { mode: 'multiply', color: 'rgba(255, 255, 255, 0.1)' }],
@@ -1101,9 +1023,37 @@
             ctx.globalCompositeOperation = 'source-over';
         }
 
-        // Initialize
+        function setupHandbook() {
+            const btn = document.getElementById('handbook-btn');
+            const panel = document.getElementById('handbook-panel');
+            const close = document.getElementById('close-handbook-btn');
+            const container = document.getElementById('handbook-content-container');
+
+            btn.onclick = async () => {
+                panel.classList.add('active');
+                // Load json if empty
+                if (!container.innerHTML) {
+                    const r = await fetch('handbook.json');
+                    const d = await r.json();
+                    d.categories.forEach(cat => {
+                        const dl = document.createElement('details');
+                        const s = document.createElement('summary'); s.textContent = cat.title;
+                        dl.appendChild(s);
+                        cat.entries.forEach(e => {
+                            const p = document.createElement('p');
+                            p.innerHTML = `<b>${e.name}</b>: ${e.description}`;
+                            p.style.margin = '8px 0';
+                            dl.appendChild(p);
+                        });
+                        container.appendChild(dl);
+                    });
+                }
+            };
+            close.onclick = () => panel.classList.remove('active');
+            panel.onclick = (e) => { if (e.target === panel) panel.classList.remove('active'); };
+        }
+
         window.addEventListener('load', init);
     </script>
 </body>
-
 </html>
