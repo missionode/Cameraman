@@ -898,6 +898,16 @@
                 // Height = source height. Width = height * targetAR.
                 targetH = video.videoHeight;
                 targetW = targetH * currentAspectRatio;
+                targetW = targetH * currentAspectRatio;
+            }
+
+            // [OPTIMIZATION] Cap Resolution to reduce heat
+            // High-res sensors (4K) cause massive overheat on resize/grading/AI
+            const MAX_DIMENSION = 1280;
+            if (targetW > MAX_DIMENSION || targetH > MAX_DIMENSION) {
+                const scale = Math.min(MAX_DIMENSION / targetW, MAX_DIMENSION / targetH);
+                targetW *= scale;
+                targetH *= scale;
             }
 
             // Update canvas size if different
@@ -972,7 +982,7 @@
 
         function processCenterStage() {
             const now = performance.now();
-            if (now - lastDetectionTime < 100) return; // Throttle to ~10 FPS
+            if (now - lastDetectionTime < 300) return; // Throttle to ~3 FPS. Save battery.
             lastDetectionTime = now;
 
             const results = faceDetector.detectForVideo(video, now);
