@@ -556,6 +556,13 @@
                     <input type="checkbox" id="center-stage-toggle">
                     <span>Center Stage</span>
                 </label>
+                <div id="movie-mode-container" style="margin-left: 30px; margin-top: 10px; display: none;">
+                    <label for="movie-mode-toggle" style="justify-content: flex-start; gap: 10px; font-size: 14px;">
+                        <input type="checkbox" id="movie-mode-toggle">
+                        <span>Movie Mode</span>
+                    </label>
+                    <small>Tracks full figure instead of just face.</small>
+                </div>
                 <small style="display:block; margin-top:4px;">Auto-zoom to keep you in frame.</small>
             </div>
 
@@ -590,6 +597,15 @@
                     <input type="checkbox" id="noise-suppression">
                     <span>Noise Suppression</span>
                 </label>
+            </div>
+
+            <div class="settings-group">
+                <label for="director-mode-toggle" style="justify-content: flex-start; gap: 10px;">
+                    <input type="checkbox" id="director-mode-toggle">
+                    <span>Director Mode</span>
+                </label>
+                <small style="display:block; margin-top:4px;">Voice commands: "Action" to Record, "Thank you" to
+                    Stop.</small>
             </div>
         </div>
     </div>
@@ -645,10 +661,16 @@
         let currentFacingMode = 'user';
         let currentAspectRatio = config.aspectRatios[0].value;
         let centerStageEnabled = false;
+        let movieModeEnabled = false;
+        let directorModeEnabled = false;
         let applyGradeToVideo = true;
         let isRecording = false;
         let faceDetector = null;
         let lastVideoTime = -1;
+
+        let recognition = null;
+        let audioCtx = null;
+        let directorDirectoryHandle = null;
 
         let canvasCtx = canvasOutput.getContext('2d', { willReadFrequently: false, alpha: false });
         let currentCrop = { x: 0, y: 0, width: 1, height: 1 };
@@ -680,7 +702,10 @@
                 // 4. Init AI (Background)
                 setupCenterStage();
 
-                // 5. UX
+                // 5. Director Mode
+                setupDirectorMode();
+
+                // 6. UX
                 setupUIHide();
 
             } catch (e) {
@@ -764,15 +789,74 @@
                 return;
             }
 
-            // Resize
-            if (canvasOutput.width !== video.videoWidth || canvasOutput.height !== video.videoHeight) {
-                canvasOutput.width = video.videoWidth;
-                canvasOutput.height = video.videoHeight;
+            // Resize Canvas to match target Aspect Ratio
+            // We lock the max dimension to the video source
+            const srcRatio = video.videoWidth / video.videoHeight;
+            let targetW, targetH;
+
+            // Decide output dimensions based on constraints
+            // We want largest possible canvas that fits in video bounds? 
+            // OR just largest possible resolution matching AR.
+            // Let's use video width as a baseline for quality.
+
+            if (currentAspectRatio >= srcRatio) {
+                // Target is wider than source (or same).
+                // Usually we can't capture wider than source unless we upscale/blackbar.
+                // But for "Portrait" on phone, source might be 9:16.
+                // If we want 16:9 from 9:16 source, we crop a LOT of height.
+
+                // Let's optimize for maximum pixels used from source.
+                // If Target AR > Source AR (e.g. 16:9 from 4:3), width is limiting factor? No, we crop top/bottom.
+                // So width = source width. Height = width / targetAR.
+
+                targetW = video.videoWidth;
+                targetH = targetW / currentAspectRatio;
+            } else {
+                // Target AR < Source AR (e.g. 9:16 from 16:9).
+                // Height = source height. Width = height * targetAR.
+                targetH = video.videoHeight;
+                targetW = targetH * currentAspectRatio;
             }
 
-            // 1. Face Tracking Math
+            // Update canvas size if different
+            if (canvasOutput.width !== Math.floor(targetW) || canvasOutput.height !== Math.floor(targetH)) {
+                canvasOutput.width = Math.floor(targetW);
+                canvasOutput.height = Math.floor(targetH);
+            }
+
+            // 1. Face Tracking / Crop Logic
             if (centerStageEnabled && faceDetector) {
                 processCenterStage();
+            } else {
+                // Default: Center Crop matching Aspect Ratio
+                const srcRatio = video.videoWidth / video.videoHeight;
+                let w = 1, h = 1;
+
+                // We want crop AR (w*sysW / h*sysH) == currentAspectRatio
+                // w/h = currentAspectRatio / srcRatio
+
+                const ratioMultiplier = currentAspectRatio / srcRatio;
+
+                if (ratioMultiplier > 1) {
+                    // Target is wider than source.
+                    // To get wider AR from square, we need smaller height. (w=1, h < 1)
+                    h = 1 / ratioMultiplier;
+                } else {
+                    // Target is taller (narrower).
+                    // We need smaller width. (h=1, w < 1)
+                    w = 1 * ratioMultiplier;
+                }
+
+                // Target: Smoothly transition to center
+                const tx = (1 - w) / 2;
+                const ty = (1 - h) / 2;
+
+                targetCrop = {
+                    x: tx,
+                    y: ty,
+                    width: w,
+                    height: h
+                };
             }
 
             // 2. Interpolate Crop
@@ -830,81 +914,93 @@
 
                 const centroidX = totalX / results.detections.length;
                 const centroidY = totalY / results.detections.length;
-
-                // 2. Calculate "Steady" Crop Size
-                // We want a fixed-ish frame size that pans.
-                // But per user request ("intimacy"), we zoom in if faces are small.
-
                 const faceWidth = maxX - minX;
 
-                // Base crop: 60% of screen (0.6). 
-                // If face is small (< 0.2), we want to zoom in (smaller crop).
-                // If face is big (> 0.5), we want to zoom out (larger crop).
+                let desiredCropWidth;
 
-                let desiredCropWidth = 0.6;
+                if (movieModeEnabled) {
+                    // MOVIE MODE: Full Figure Heuristic
+                    // Assume Body Width is roughly 3x Face Width
+                    // Assume Body Height is roughly 7x Face Height
 
-                if (faceWidth < 0.2) {
-                    // Intimacy Mode: Zoom in to keep face roughly 1/3 of frame
-                    desiredCropWidth = Math.max(0.3, faceWidth * 3.0);
-                } else if (faceWidth > 0.5) {
-                    // Too close: Zoom out
-                    desiredCropWidth = Math.min(1.0, faceWidth * 1.5);
+                    // We want the frame to be roughly height dominated if possible, or just wide enough.
+                    // Let's set the crop HEIGHT based on face size to fit the full body.
+
+                    // Logic: Frame Height = Face Height * 6.0
+                    // But we work with Width here mostly. Face ratio is usually 1:1ish bounding box in BlazeFace?
+
+                    // If faceWidth is 0.1 (10% of screen), we want CropWidth to vary?
+
+                    // Let's say we want the face to be small in the frame (Full Shot).
+                    // Target Face Width in Frame = 0.15 (15%)
+
+                    desiredCropWidth = Math.min(1.0, faceWidth * 5.0);
+
+                    // But prevent it from getting too tight. Full Figure means ZOOM OUT.
+                    desiredCropWidth = Math.max(0.8, desiredCropWidth); // Always keep it fairly wide
+
+                } else {
+                    // STANDARD: Steady Cam / Intimacy
+                    desiredCropWidth = 0.6;
+                    if (faceWidth < 0.2) {
+                        desiredCropWidth = Math.max(0.3, faceWidth * 3.0);
+                    } else if (faceWidth > 0.5) {
+                        desiredCropWidth = Math.min(1.0, faceWidth * 1.5);
+                    }
                 }
 
-                // Smoothly interpolate the TARGET size itself to prevent "breathing"
-                // uses a separate persistent variable for the "target" state if possible, 
-                // but since we don't have one, we rely on the main loop's interpolation (0.05).
-                // To make it "Steady", we clamp the change rate or just trust the loop.
-                // For "Window" effect, we calculate Dimensions then Position.
+                // ... (Rest of Aspect Ratio Logic) ... 
+                // We'll reimplement the middle block to handle the Movie Mode vertical offset
 
                 // Apply Aspect Ratio to Dimensions
                 let w = desiredCropWidth;
                 let h = w;
                 const screenAspect = video.videoWidth / video.videoHeight;
-
-                // We need the CROP to match currentAspectRatio
-                // cropW_px / cropH_px = currentAspectRatio
-                // (w * vidW) / (h * vidH) = currentAspectRatio
-                // w / h = currentAspectRatio / screenAspect
-
                 const ratioMultiplier = currentAspectRatio / screenAspect;
 
                 if (ratioMultiplier > 1) {
-                    // Target is wider than screen: Width is master(w), Height must be smaller
                     h = w / ratioMultiplier;
                 } else {
-                    // Target is taller: Height is master(h = w usually), but let's base on height
-                    // Actually simpler: Set W, derive H. If H > 1, shrink both.
                     h = w / ratioMultiplier;
                 }
 
-                // If calculated height is too big, scale down to fit
                 if (h > 1.0) {
                     h = 1.0;
                     w = h * ratioMultiplier;
                 }
 
                 // 3. Position the Crop (Pan)
-                // Center it on Centroid, but Clamp to edges (0,0) and (1,1)
-
                 let x = centroidX - w / 2;
                 let y = centroidY - h / 2;
+
+                if (movieModeEnabled) {
+                    // Offset Y to put face at top (Full Figure)
+                    // Currently Centroid is Center. We want Centroid at Top 20%.
+                    // Screen Top is y=0 using crop coords (detected relative to video).
+
+                    // We want: (centroidY - y) / h = 0.25 (Headroom)
+                    // centroidY - y = 0.25 * h
+                    // y = centroidY - 0.25 * h
+
+                    y = centroidY - 0.20 * h;
+                }
 
                 // Clamp
                 x = Math.max(0, Math.min(1 - w, x));
                 y = Math.max(0, Math.min(1 - h, y));
 
-                targetCrop = {
-                    x: x,
-                    y: y,
-                    width: w,
-                    height: h
-                };
+                targetCrop = { x, y, width: w, height: h };
 
             } else {
-                // No faces? Default to a wide steady shot (0.8) or full screen?
-                // Full screen allows the user to re-orient.
-                targetCrop = { x: 0, y: 0, width: 1, height: 1 };
+                // No faces OR Center Stage Disabled?
+                // Actually this function only runs if (centerStageEnabled && faceDetector) ??
+                // No, I need to handle the "CS Disabled" case for default crop too if I put it here.
+                // But `processCenterStage` is guarded in `canvasLoop`.
+
+                // We should calculate a CENTER CROP for the default state so it doesn't stretch.
+                // But wait, `processCenterStage` is NOT CALLED if CS is disabled.
+                // I need to change the logic in `canvasLoop` to calculate default crop if CS is off.
+                // OR allow this function to run always but behave differently.
             }
         }
 
@@ -948,12 +1044,156 @@
                 applyGradeToVideo = e.target.checked;
             });
 
-            document.getElementById('center-stage-toggle').addEventListener('change', (e) => {
+            const csToggle = document.getElementById('center-stage-toggle');
+            const mmContainer = document.getElementById('movie-mode-container');
+            const mmToggle = document.getElementById('movie-mode-toggle');
+
+            csToggle.addEventListener('change', (e) => {
                 centerStageEnabled = e.target.checked;
-                if (!centerStageEnabled) {
-                    targetCrop = { x: 0, y: 0, width: 1, height: 1 };
+                // Show/Hide Movie Mode
+                mmContainer.style.display = centerStageEnabled ? 'block' : 'none';
+
+                // No need to reset targetCrop manually here, the main loop handles it.
+            });
+
+            mmToggle.addEventListener('change', (e) => {
+                movieModeEnabled = e.target.checked;
+            });
+
+            document.getElementById('director-mode-toggle').addEventListener('change', async (e) => {
+                directorModeEnabled = e.target.checked;
+                if (directorModeEnabled) {
+                    try {
+                        // Request Directory Access for Auto-Save
+                        directorDirectoryHandle = await window.showDirectoryPicker({
+                            id: 'cameraman-takes',
+                            mode: 'readwrite'
+                        });
+                        startListening();
+                        updateDynamicIsland("Director Mode Ready");
+                    } catch (err) {
+                        console.error("Directory access denied:", err);
+                        e.target.checked = false;
+                        directorModeEnabled = false;
+                        updateDynamicIsland("Error", "Storage Access Required", "red");
+                    }
+                } else {
+                    stopListening();
+                    directorDirectoryHandle = null;
                 }
             });
+        }
+
+        // --- DIRECTOR MODE ---
+        function setupDirectorMode() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.lang = 'en-US';
+                recognition.interimResults = false;
+
+                recognition.onresult = (event) => {
+                    const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+                    console.log("Director heard:", transcript);
+
+                    if (transcript.includes('action') && !isRecording) {
+                        startRecordingWithCountdown();
+                    } else if ((transcript.includes('thank you') || transcript.includes('cut')) && isRecording) {
+                        stopRecordingWithCountdown();
+                    }
+                };
+
+                recognition.onerror = (event) => {
+                    if (event.error === 'no-speech' || event.error === 'aborted') return;
+                    console.error("Speech Recognition Error", event.error);
+                };
+
+                recognition.onend = () => {
+                    if (directorModeEnabled) {
+                        recognition.start();
+                    }
+                };
+            } else {
+                console.warn("Speech Recognition not supported");
+                document.getElementById('director-mode-toggle').disabled = true;
+            }
+        }
+
+        function startListening() {
+            if (recognition) {
+                try { recognition.start(); } catch (e) { }
+                updateDynamicIsland("Director Mode On");
+            }
+        }
+
+        function stopListening() {
+            if (recognition) {
+                recognition.stop();
+                updateDynamicIsland("Director Mode Off");
+            }
+        }
+
+        async function startRecordingWithCountdown() {
+            if (isRecording) return;
+
+            // Audio Context for Beeps
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+            let count = 3;
+            updateDynamicIsland(count.toString());
+            playTone(800, 0.1);
+
+            const interval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    updateDynamicIsland(count.toString());
+                    playTone(800, 0.1);
+                } else {
+                    clearInterval(interval);
+                    updateDynamicIsland("ACTION!");
+                    playTone(1200, 0.4); // Higher pitch for start
+                    setTimeout(() => startRecording(), 500);
+                }
+            }, 1000);
+        }
+
+        async function stopRecordingWithCountdown() {
+            if (!isRecording) return;
+
+            // Audio Context
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+            let count = 3;
+            updateDynamicIsland("CUT IN " + count);
+            playTone(600, 0.1);
+
+            const interval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    updateDynamicIsland("CUT IN " + count);
+                    playTone(600, 0.1);
+                } else {
+                    clearInterval(interval);
+                    updateDynamicIsland("CUT!");
+                    // Play cut sound inside stopRecording will handle the final tone
+                    setTimeout(() => stopRecording(), 200);
+                }
+            }, 1000);
+        }
+
+        function playTone(freq, duration) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.frequency.value = freq;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+            osc.stop(audioCtx.currentTime + duration);
         }
 
         function setupUIHide() {
@@ -983,45 +1223,109 @@
         // --- RECORDING ---
         recordContainer.onclick = async () => {
             if (!isRecording) {
-                // START
-                try {
-                    fileHandle = await window.showSaveFilePicker({
-                        suggestedName: `video-${Date.now()}.webm`,
-                        types: [{ description: 'WebM Video', accept: { 'video/webm': ['.webm'] } }]
-                    });
-                    const writable = await fileHandle.createWritable();
-                    recorderWorker.postMessage({ type: 'init', payload: { writableStream: writable } }, [writable]);
-
-                    mediaRecorder = new MediaRecorder(destinationStream, { mimeType: 'video/webm; codecs=vp9,opus', videoBitsPerSecond: 10000000 });
-                    mediaRecorder.ondataavailable = e => {
-                        if (e.data.size > 0) recorderWorker.postMessage({ type: 'write', payload: { data: e.data } });
-                    };
-                    mediaRecorder.onstop = () => recorderWorker.postMessage({ type: 'close' });
-
-                    mediaRecorder.start(1000);
-                    isRecording = true;
-                    recordingStartTime = Date.now();
-
-                    dynamicIsland.classList.add('recording');
-                    diTimerContainer.classList.remove('hidden');
-                    recordBtnInner.classList.add('recording');
-                    updateDynamicIsland('Recording', '', 'red');
-                    updateTimer();
-
-                } catch (e) {
-                    console.error(e);
-                }
+                await startRecording();
             } else {
-                // STOP
-                if (mediaRecorder) mediaRecorder.stop();
-                isRecording = false;
-                dynamicIsland.classList.remove('recording');
-                diTimerContainer.classList.add('hidden');
-                recordBtnInner.classList.remove('recording');
-                updateDynamicIsland('Saving...');
-                clearTimeout(recordingInterval);
+                stopRecording();
             }
         };
+
+        async function startRecording() {
+            if (isRecording) return;
+            try {
+                const mimeType = getSupportedMimeType();
+                const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+
+                // Auto-Save logic for Director Mode
+                if (directorModeEnabled && directorDirectoryHandle) {
+                    const filename = `take-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`;
+                    fileHandle = await directorDirectoryHandle.getFileHandle(filename, { create: true });
+                } else {
+                    // Manual Mode
+                    fileHandle = await window.showSaveFilePicker({
+                        suggestedName: `video-${Date.now()}.${extension}`,
+                        types: [{
+                            description: 'Video File',
+                            accept: { [mimeType.split(';')[0]]: ['.' + extension] }
+                        }]
+                    });
+                }
+
+                const writable = await fileHandle.createWritable();
+
+                mediaRecorder = new MediaRecorder(destinationStream, { mimeType: mimeType, videoBitsPerSecond: 10000000 });
+                mediaRecorder.ondataavailable = async (e) => {
+                    if (e.data.size > 0) {
+                        // Write directly on Main Thread to avoid DataCloneError
+                        try {
+                            await writable.write(e.data);
+                            // Visual feedback
+                            diIndicator.style.opacity = (diIndicator.style.opacity === '1' ? '0.5' : '1');
+                        } catch (err) {
+                            console.error("Write error:", err);
+                            updateDynamicIsland("Error", "Write Failed", "red");
+                        }
+                    }
+                };
+                mediaRecorder.onstop = async () => {
+                    try {
+                        await writable.close();
+                        console.log("File closed successfully.");
+                        updateDynamicIsland("Saved");
+                        setTimeout(() => updateDynamicIsland("Ready"), 2000);
+                    } catch (err) {
+                        console.error("Close error:", err);
+                        updateDynamicIsland("Error", "Save Failed", "red");
+                    }
+                };
+
+                mediaRecorder.start(1000);
+                isRecording = true;
+                recordingStartTime = Date.now();
+
+                dynamicIsland.classList.add('recording');
+                diTimerContainer.classList.remove('hidden');
+                recordBtnInner.classList.add('recording');
+                updateDynamicIsland('Recording', '', 'red');
+                updateTimer();
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function stopRecording() {
+            if (!isRecording) return;
+            mediaRecorder.stop();
+            isRecording = false;
+
+            // Stop Sound (Descending Tone)
+            playTone(600, 0.1);
+            setTimeout(() => playTone(300, 0.2), 100);
+
+            dynamicIsland.classList.remove('recording');
+            diTimerContainer.classList.add('hidden');
+            recordBtnInner.classList.remove('recording');
+            diTimer.textContent = '00:00';
+            updateDynamicIsland("Saving..."); // Updated status
+            // Saved status handled in onstop
+            clearTimeout(recordingInterval);
+        }
+
+        function getSupportedMimeType() {
+            const types = [
+                'video/webm; codecs=vp9,opus',
+                'video/webm; codecs=vp8,opus',
+                'video/webm',
+                'video/mp4' // Safari support
+            ];
+            for (const type of types) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    console.log("Using MIME:", type);
+                    return type;
+                }
+            }
+            return ''; // Let browser default
+        }
 
         function updateTimer() {
             if (!isRecording) return;
