@@ -738,6 +738,7 @@
         let applyGradeToVideo = true;
         let isRecording = false;
         let faceDetector = null;
+        let lastDetectionTime = 0;
         let lastVideoTime = -1;
 
         let recognition = null;
@@ -970,9 +971,11 @@
         }
 
         function processCenterStage() {
-            if (video.currentTime === lastVideoTime) return;
-            const results = faceDetector.detectForVideo(video, performance.now());
-            lastVideoTime = video.currentTime;
+            const now = performance.now();
+            if (now - lastDetectionTime < 100) return; // Throttle to ~10 FPS
+            lastDetectionTime = now;
+
+            const results = faceDetector.detectForVideo(video, now);
 
             if (results.detections.length > 0) {
                 // 1. Calculate Centroid (Target Center)
@@ -1187,7 +1190,14 @@
                     const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
                     console.log("Director heard:", transcript);
 
-                    if (transcript.includes('action') && !isRecording) {
+                    // Debug Feedback
+                    updateDynamicIsland(`Heard: "${transcript}"`);
+                    setTimeout(() => {
+                        if (!isRecording) updateDynamicIsland("Director Mode Ready");
+                        else updateDynamicIsland("Recording");
+                    }, 1500);
+
+                    if ((transcript.includes('action') || transcript.includes('start') || transcript.includes('shoot')) && !isRecording) {
                         startRecordingWithCountdown();
                     } else if ((transcript.includes('thank you') || transcript.includes('cut')) && isRecording) {
                         stopRecordingWithCountdown();
