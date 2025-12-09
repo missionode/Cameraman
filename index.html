@@ -1229,6 +1229,53 @@
             }
         };
 
+        // --- PHOTO CAPTURE ---
+        captureButton.onclick = async () => {
+            // Flash effect
+            const flash = document.createElement('div');
+            flash.style.position = 'fixed';
+            flash.style.top = '0';
+            flash.style.left = '0';
+            flash.style.width = '100%';
+            flash.style.height = '100%';
+            flash.style.backgroundColor = 'white';
+            flash.style.opacity = '0.8';
+            flash.style.transition = 'opacity 0.2s';
+            flash.style.zIndex = '9999';
+            document.body.appendChild(flash);
+            setTimeout(() => {
+                flash.style.opacity = '0';
+                setTimeout(() => document.body.removeChild(flash), 200);
+            }, 50);
+
+            // Shutter Sound
+            playTone(800, 0.05);
+
+            canvasOutput.toBlob(async (blob) => {
+                if (!blob) return;
+                try {
+                    let handle;
+                    if (directorModeEnabled && directorDirectoryHandle) {
+                        const filename = `photo-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+                        handle = await directorDirectoryHandle.getFileHandle(filename, { create: true });
+                    } else {
+                        handle = await window.showSaveFilePicker({
+                            suggestedName: `photo-${Date.now()}.png`,
+                            types: [{ description: 'PNG Image', accept: { 'image/png': ['.png'] } }]
+                        });
+                    }
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    updateDynamicIsland("Photo Saved");
+                    setTimeout(() => updateDynamicIsland("Ready"), 1500);
+                } catch (err) {
+                    console.error("Photo Save Failed", err);
+                    updateDynamicIsland("Error", "Save Failed", "red");
+                }
+            }, 'image/png');
+        };
+
         async function startRecording() {
             if (isRecording) return;
             try {
