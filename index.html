@@ -1437,26 +1437,102 @@
 
             btn.onclick = async () => {
                 panel.classList.add('active');
-                // Load json if empty
-                if (!container.innerHTML) {
-                    const r = await fetch('handbook.json');
-                    const d = await r.json();
-                    d.categories.forEach(cat => {
-                        const dl = document.createElement('details');
-                        const s = document.createElement('summary'); s.textContent = cat.title;
-                        dl.appendChild(s);
-                        cat.entries.forEach(e => {
-                            const p = document.createElement('p');
-                            p.innerHTML = `<b>${e.name}</b>: ${e.description}`;
-                            p.style.margin = '8px 0';
-                            dl.appendChild(p);
+                if (container.children.length === 0) {
+                    try {
+                        const res = await fetch('handbook.json');
+                        const data = await res.json();
+                        // Render
+                        data.categories.forEach(cat => {
+                            const h3 = document.createElement('h3');
+                            h3.textContent = cat.category;
+                            container.appendChild(h3);
+                            cat.entries.forEach(entry => {
+                                const div = document.createElement('div');
+                                div.className = 'handbook-entry';
+                                div.innerHTML = `<strong>${entry.name}</strong><p>${entry.description}</p>`;
+                                container.appendChild(div);
+                            });
                         });
-                        container.appendChild(dl);
-                    });
+                    } catch (e) { container.innerHTML = '<p>Offline handbook unavailable.</p>'; }
                 }
             };
             close.onclick = () => panel.classList.remove('active');
-            panel.onclick = (e) => { if (e.target === panel) panel.classList.remove('active'); };
+
+            // PWA Install Logic
+            let deferredPrompt;
+            const toast = document.getElementById('install-toast');
+            const installBtn = document.getElementById('toast-install-btn');
+            const dismissBtn = document.getElementById('toast-dismiss-btn');
+
+            // Check if already installed (heuristic)
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+                toast.classList.remove('visible'); // Don't show in app
+            } else {
+                // Check for installed apps API
+                if ('getInstalledRelatedApps' in navigator) {
+                    navigator.getInstalledRelatedApps().then(apps => {
+                        if (apps.length > 0) {
+                            // Already installed
+                            toast.querySelector('span').textContent = "Open Cameraman App for best experience!";
+                            installBtn.textContent = "Open";
+                            installBtn.onclick = () => {
+                                // Try to open via scope? Or just instruct.
+                                // There is no direct API to "Open App" from web. 
+                                // But we can acknowledge it.
+                                alert("Please open 'Cameraman' from your home screen or app library.");
+                            };
+                            toast.classList.add('visible'); // Show prompt
+                        }
+                    });
+                }
+
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    e.preventDefault();
+                    deferredPrompt = e;
+                    toast.querySelector('span').textContent = "Install this app for the best experience!";
+                    installBtn.textContent = "Install";
+                    toast.classList.add('visible');
+
+                    installBtn.onclick = async () => {
+                        if (deferredPrompt) {
+                            deferredPrompt.prompt();
+                            const { outcome } = await deferredPrompt.userChoice;
+                            console.log(`User response to the install prompt: ${outcome}`);
+                            deferredPrompt = null;
+                            toast.classList.remove('visible');
+                        }
+                    };
+                });
+            }
+
+            dismissBtn.onclick = () => {
+                toast.classList.remove('visible');
+            };
+
+            window.addEventListener('appinstalled', () => {
+                deferredPrompt = null;
+                console.log('PWA was installed');
+                toast.classList.remove('visible');
+            });
+            if (!container.innerHTML) {
+                const r = await fetch('handbook.json');
+                const d = await r.json();
+                d.categories.forEach(cat => {
+                    const dl = document.createElement('details');
+                    const s = document.createElement('summary'); s.textContent = cat.title;
+                    dl.appendChild(s);
+                    cat.entries.forEach(e => {
+                        const p = document.createElement('p');
+                        p.innerHTML = `<b>${e.name}</b>: ${e.description}`;
+                        p.style.margin = '8px 0';
+                        dl.appendChild(p);
+                    });
+                    container.appendChild(dl);
+                });
+            }
+        };
+        close.onclick = () => panel.classList.remove('active');
+        panel.onclick = (e) => { if (e.target === panel) panel.classList.remove('active'); };
         }
 
         window.addEventListener('load', init);
