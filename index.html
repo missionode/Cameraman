@@ -1204,7 +1204,8 @@
                 recognition.maxAlternatives = 1;
 
                 recognition.onresult = (event) => {
-                    const result = event.results[event.results.length - 1]; // Continuous mode: get last result
+                    // [FIX] Use resultIndex to get the specific newer result, not just the last one
+                    const result = event.results[event.resultIndex]; 
                     const transcript = result[0].transcript.trim().toLowerCase();
                     const isFinal = result.isFinal;
 
@@ -1217,10 +1218,19 @@
 
                     // Only trigger action on FINAL results to avoid false positives
                     if (isFinal) {
+                        let commandTriggered = false;
                         if ((transcript.includes('action') || transcript.includes('start') || transcript.includes('shoot')) && !isRecording) {
                             startRecordingWithCountdown();
+                            commandTriggered = true;
                         } else if ((transcript.includes('thank you') || transcript.includes('cut')) && isRecording) {
                             stopRecordingWithCountdown();
+                            commandTriggered = true;
+                        }
+
+                        // [FIX] Session Reset: Abort to clear history and force fresh start
+                        if (commandTriggered) {
+                            console.log("Command triggered, resetting session...");
+                            recognition.abort(); 
                         }
                     }
                 };
