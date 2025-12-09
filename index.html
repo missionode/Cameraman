@@ -737,6 +737,8 @@
         let directorModeEnabled = false;
         let applyGradeToVideo = true;
         let isRecording = false;
+        let isCountingDown = false; // Guard against multiple triggers
+        let isHandingOverMic = false; // Guard against onend restart
         let faceDetector = null;
         let lastDetectionTime = 0;
         let lastVideoTime = -1;
@@ -1239,7 +1241,7 @@
                 };
 
                 recognition.onend = () => {
-                    if (directorModeEnabled) {
+                    if (directorModeEnabled && !isHandingOverMic) {
                         recognition.start();
                     }
                 };
@@ -1264,7 +1266,8 @@
         }
 
         async function startRecordingWithCountdown() {
-            if (isRecording) return;
+            if (isRecording || isCountingDown) return;
+            isCountingDown = true;
 
             // Audio Context for Beeps
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1283,7 +1286,10 @@
                     clearInterval(interval);
                     updateDynamicIsland("ACTION!");
                     playTone(1200, 0.4); // Higher pitch for start
-                    setTimeout(() => startRecording(), 500);
+                    setTimeout(() => {
+                        startRecording();
+                        isCountingDown = false;
+                    }, 500);
                 }
             }, 1000);
         }
@@ -1416,6 +1422,7 @@
 
             // 1. [FIX] Pause Director Mode (Release Mic)
             if (directorModeEnabled && recognition) {
+                isHandingOverMic = true; // Prevents onend from auto-restarting
                 try { recognition.stop(); } catch (e) { }
                 updateDynamicIsland("Mic Swapping...");
             }
@@ -1486,6 +1493,7 @@
                         // [FIX] Resume Director Mode (Re-acquire Mic)
                         if (directorModeEnabled && recognition) {
                             setTimeout(() => {
+                                isHandingOverMic = false; // Reset flag after mic is re-acquired
                                 try { recognition.start(); } catch (e) { }
                                 updateDynamicIsland("Director Mode Ready");
                             }, 500);
