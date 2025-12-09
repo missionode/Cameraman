@@ -33,14 +33,22 @@
             background: #000;
             color: #fff;
             height: 100vh;
+            height: 100dvh;
+            /* Mobile viewport fix */
+            width: 100vw;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             user-select: none;
+            margin: 0;
+            padding: 0;
         }
 
         .container {
-            position: relative;
+            position: absolute;
+            /* Changed from relative to absolute to force full filling */
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
@@ -49,13 +57,15 @@
 
         /* --- Viewfinder --- */
         #video,
-        canvas {
+        #canvas-output {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
+            transform: translateZ(0);
+            /* Force hardware accel */
             transition: opacity 0.3s ease;
         }
 
@@ -300,6 +310,7 @@
         input[type=range][orient=vertical] {
             writing-mode: bt-lr;
             -webkit-appearance: slider-vertical;
+            appearance: slider-vertical;
             width: 100%;
             height: 100%;
             opacity: 0.8;
@@ -433,8 +444,7 @@
             display: none !important;
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"
-        crossorigin="anonymous"></script>
+
 </head>
 
 <body>
@@ -541,7 +551,13 @@
                 <select id="color-grading"></select>
             </div>
 
-            <!-- Center Stage will be injected here -->
+            <div class="settings-group">
+                <label for="center-stage-toggle" style="justify-content: flex-start; gap: 10px;">
+                    <input type="checkbox" id="center-stage-toggle">
+                    <span>Center Stage</span>
+                </label>
+                <small style="display:block; margin-top:4px;">Auto-zoom to keep you in frame.</small>
+            </div>
 
             <div class="settings-group">
                 <label for="apply-grade-to-video" style="justify-content: flex-start; gap: 10px;">
@@ -579,7 +595,7 @@
     </div>
 
     <script type="module">
-        import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/+esm";
+        import { FaceDetector, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/+esm";
 
         // --- CONFIGURATION ---
         const config = {
@@ -631,7 +647,7 @@
         let centerStageEnabled = false;
         let applyGradeToVideo = true;
         let isRecording = false;
-        let faceLandmarker = null;
+        let faceDetector = null;
         let lastVideoTime = -1;
 
         let canvasCtx = canvasOutput.getContext('2d', { willReadFrequently: false, alpha: false });
@@ -719,54 +735,26 @@
         }
 
         // --- CENTER STAGE ---
+
         async function setupCenterStage() {
             try {
                 console.log("Loading Center Stage...");
                 const filesetResolver = await FilesetResolver.forVisionTasks(
                     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
                 );
-                faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+                faceDetector = await FaceDetector.createFromOptions(filesetResolver, {
                     baseOptions: {
                         modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
                         delegate: "GPU"
                     },
-                    runningMode: "VIDEO",
-                    numFaces: 2
+                    runningMode: "VIDEO"
                 });
                 console.log("Center Stage Ready");
 
-                // Inject Toggle ONLY after loaded or if we want to show it disabled
-                injectCenterStageToggle();
-
+                // Enable toggle if heavily dependent on it, otherwise it works as is
             } catch (e) {
                 console.error("Center Stage Load Failed", e);
             }
-        }
-
-        function injectCenterStageToggle() {
-            const container = document.querySelector('#aspect-ratio').closest('.settings-group');
-            if (!container) return; // Paranoia check
-
-            const div = document.createElement('div');
-            div.className = 'settings-group';
-            div.innerHTML = `
-                <label for="center-stage-toggle" style="justify-content: flex-start; gap: 10px;">
-                    <input type="checkbox" id="center-stage-toggle">
-                    <span>Center Stage</span>
-                </label>
-                <small style="display:block; margin-top:4px;">Auto-zoom to keep faces in frame.</small>
-            `;
-
-            // Insert after Aspect Ratio
-            container.after(div);
-
-            const toggle = document.getElementById('center-stage-toggle');
-            toggle.addEventListener('change', () => {
-                centerStageEnabled = toggle.checked;
-                if (!centerStageEnabled) {
-                    targetCrop = { x: 0, y: 0, width: 1, height: 1 };
-                }
-            });
         }
 
         // --- CANVAS LOOP ---
@@ -783,7 +771,7 @@
             }
 
             // 1. Face Tracking Math
-            if (centerStageEnabled && faceLandmarker) {
+            if (centerStageEnabled && faceDetector) {
                 processCenterStage();
             }
 
@@ -818,7 +806,7 @@
 
         function processCenterStage() {
             if (video.currentTime === lastVideoTime) return;
-            const results = faceLandmarker.detectForVideo(video, performance.now());
+            const results = faceDetector.detectForVideo(video, performance.now());
             lastVideoTime = video.currentTime;
 
             if (results.detections.length > 0) {
@@ -909,6 +897,13 @@
 
             document.getElementById('apply-grade-to-video').addEventListener('change', (e) => {
                 applyGradeToVideo = e.target.checked;
+            });
+
+            document.getElementById('center-stage-toggle').addEventListener('change', (e) => {
+                centerStageEnabled = e.target.checked;
+                if (!centerStageEnabled) {
+                    targetCrop = { x: 0, y: 0, width: 1, height: 1 };
+                }
             });
         }
 
@@ -1056,4 +1051,5 @@
         window.addEventListener('load', init);
     </script>
 </body>
+
 </html>
