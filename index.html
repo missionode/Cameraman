@@ -819,7 +819,7 @@
                     aspectRatio: { ideal: currentAspectRatio },
                     facingMode: currentFacingMode
                 },
-                audio: true
+                audio: false // [FIX] Disable initial audio to prevent conflict with Speech Recognition
             };
 
             try {
@@ -830,9 +830,9 @@
                 await new Promise(r => video.onloadedmetadata = r);
 
                 // Setup destination stream for recorder
+                // Setup destination stream for recorder (Video Only initially)
                 const canvasStream = canvasOutput.captureStream(30);
-                const audioTrack = stream.getAudioTracks()[0];
-                destinationStream = new MediaStream([...canvasStream.getVideoTracks(), ...(audioTrack ? [audioTrack] : [])]);
+                destinationStream = new MediaStream(canvasStream.getVideoTracks()); // Audio added on record start
 
                 updateDynamicIsland('Ready');
             } catch (err) {
@@ -1191,37 +1191,51 @@
         function setupDirectorMode() {
             if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                // VISUAL DEBUG: Report Support
+                console.log("Speech API Supported");
+                updateDynamicIsland("Speech API Supported");
+
                 recognition = new SpeechRecognition();
                 recognition.continuous = true;
                 recognition.lang = 'en-US';
-                recognition.interimResults = false;
+                recognition.interimResults = true; // Enable partial results for debug
+                recognition.maxAlternatives = 1;
 
                 recognition.onresult = (event) => {
-                    const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
-                    console.log("Director heard:", transcript);
+                    const result = event.results[event.results.length - 1];
+                    const transcript = result[0].transcript.trim().toLowerCase();
+                    const isFinal = result.isFinal;
+
+                    console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
 
                     // Debug Feedback
-                    updateDynamicIsland(`Heard: "${transcript}"`);
-                    setTimeout(() => {
-                        if (!isRecording) updateDynamicIsland("Director Mode Ready");
-                        else updateDynamicIsland("Recording");
-                    }, 1500);
+                    if (isFinal || transcript.length > 3) {
+                        updateDynamicIsland(`Heard: "${transcript}"`);
+                    }
 
-                    if ((transcript.includes('action') || transcript.includes('start') || transcript.includes('shoot')) && !isRecording) {
-                        startRecordingWithCountdown();
-                    } else if ((transcript.includes('thank you') || transcript.includes('cut')) && isRecording) {
-                        stopRecordingWithCountdown();
+                    // Only trigger action on FINAL results to avoid false positives
+                    if (isFinal) {
+                        if ((transcript.includes('action') || transcript.includes('start') || transcript.includes('shoot')) && !isRecording) {
+                            startRecordingWithCountdown();
+                        } else if ((transcript.includes('thank you') || transcript.includes('cut')) && isRecording) {
+                            stopRecordingWithCountdown();
+                        }
                     }
                 };
 
+                recognition.onstart = () => {
+                    updateDynamicIsland("Mic Active - Speak Now");
+                };
+
                 recognition.onerror = (event) => {
-                    if (event.error === 'no-speech' || event.error === 'aborted') return;
-                    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                        updateDynamicIsland("Error", "Mic Access Denied", "red");
-                        console.error("Mic Access Denied", event.error);
-                        return;
-                    }
                     console.error("Speech Recognition Error", event.error);
+                    // Show ALL errors for debugging
+                    updateDynamicIsland(`Mic Error: ${event.error}`, '', 'red');
+
+                    // Specific handling
+                    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                        alert("Microphone Access Denied. Please reset permissions for this site.");
+                    }
                 };
 
                 recognition.onend = () => {
@@ -1399,6 +1413,13 @@
 
         async function startRecording() {
             if (isRecording) return;
+
+            // 1. [FIX] Pause Director Mode (Release Mic)
+            if (directorModeEnabled && recognition) {
+                try { recognition.stop(); } catch (e) { }
+                updateDynamicIsland("Mic Swapping...");
+            }
+
             try {
                 const mimeType = getSupportedMimeType();
                 const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
@@ -1420,7 +1441,25 @@
 
                 const writable = await fileHandle.createWritable();
 
-                mediaRecorder = new MediaRecorder(destinationStream, { mimeType: mimeType, videoBitsPerSecond: 10000000 });
+                // 2. [FIX] Request Audio Stream JUST for Recording
+                const audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true }
+                });
+
+                // 3. Combine with Video
+                const audioTrack = audioStream.getAudioTracks()[0];
+                const combinedStream = new MediaStream([
+                    ...destinationStream.getVideoTracks(),
+                    audioTrack
+                ]);
+
+                // Update destinationStream for this session
+                // actually we can just use combinedStream for MediaRecorder
+
+                mediaRecorder = new MediaRecorder(combinedStream, { mimeType: mimeType, videoBitsPerSecond: 10000000 });
+
+                // Store audio track to stop it later
+                mediaRecorder.audioTrack = audioTrack;
                 mediaRecorder.ondataavailable = async (e) => {
                     if (e.data.size > 0) {
                         // Write directly on Main Thread to avoid DataCloneError
@@ -1438,12 +1477,26 @@
                     try {
                         await writable.close();
                         console.log("File closed successfully.");
-                        updateDynamicIsland("Saved");
-                        setTimeout(() => updateDynamicIsland("Ready"), 2000);
-                    } catch (err) {
-                        console.error("Close error:", err);
-                        updateDynamicIsland("Error", "Save Failed", "red");
-                    }
+
+                        // [FIX] Stop Audio Track to release Mic
+                        if (mediaRecorder.audioTrack) {
+                            mediaRecorder.audioTrack.stop();
+                        }
+
+                        // [FIX] Resume Director Mode (Re-acquire Mic)
+                        if (directorModeEnabled && recognition) {
+                            setTimeout(() => {
+                                try { recognition.start(); } catch (e) { }
+                                updateDynamicIsland("Director Mode Ready");
+                            }, 500);
+                        }
+
+                    } catch (err) { console.error("File Close Error", err); }
+
+                    isRecording = false;
+                    recordBtnInner.classList.remove('recording');
+                    diTimerContainer.classList.add('hidden');
+                    updateDynamicIsland("Saved", "", "green");
                 };
 
                 mediaRecorder.start(1000);
