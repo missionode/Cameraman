@@ -618,6 +618,8 @@
             aspectRatios: [
                 { name: '16:9', value: 1.7777777778 },
                 { name: '4:3', value: 1.3333333333 },
+                { name: '1:1', value: 1.0 },
+                { name: '9:16 (Portrait)', value: 0.5625 },
                 { name: '2.39:1', value: 2.39 }
             ],
             colorGradings: [
@@ -658,7 +660,7 @@
 
         // --- APP STATE ---
         let stream = null;
-        let currentFacingMode = 'user';
+        let currentFacingMode = 'environment'; // Default to Back Camera for Mobile
         let currentAspectRatio = config.aspectRatios[0].value;
         let centerStageEnabled = false;
         let movieModeEnabled = false;
@@ -696,6 +698,15 @@
                 recorderWorker.onmessage = handleWorkerMessage;
 
                 // 3. Init Camera & Canvas
+
+                // Auto-Detect Orientation for Default
+                if (window.innerHeight > window.innerWidth) {
+                    console.log("Portrait Mode Detected");
+                    // Set to 9:16
+                    currentAspectRatio = 0.5625;
+                    aspectRatioSelect.value = "0.5625";
+                }
+
                 await startCamera();
                 requestAnimationFrame(canvasLoop);
 
