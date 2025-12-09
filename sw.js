@@ -1,9 +1,10 @@
-const CACHE_NAME = 'centre-stage-camera-v2';
+const CACHE_NAME = 'cameraman-pwa-v3';
 const urlsToCache = [
   '/',
   '/index.html',
   '/manifest.json',
   '/handbook.json',
+  '/recorder.worker.js',
   '/icon-192.svg',
   '/icon-512.svg'
 ];
@@ -27,7 +28,7 @@ self.addEventListener('fetch', event => {
         }
         return fetch(event.request);
       }
-    )
+      )
   );
 });
 
