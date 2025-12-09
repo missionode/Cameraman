@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -163,7 +164,8 @@
             gap: 10px;
         }
 
-        #handbook-btn, #settings-btn {
+        #handbook-btn,
+        #settings-btn {
             width: 48px;
             height: 48px;
             padding: 10px;
@@ -171,7 +173,8 @@
 
         .recording-indicator {
             position: absolute;
-            top: 80px; /* Adjusted position */
+            top: 80px;
+            /* Adjusted position */
             left: 20px;
             background: rgba(220, 53, 69, 0.8);
             backdrop-filter: blur(20px);
@@ -203,7 +206,8 @@
             background: rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(10px);
             z-index: 1000;
-            display: none; /* Hidden by default */
+            display: none;
+            /* Hidden by default */
             align-items: center;
             justify-content: center;
         }
@@ -280,20 +284,24 @@
             border-radius: 8px;
             margin-bottom: 10px;
         }
+
         #handbook-content-container summary {
             padding: 15px;
             font-weight: bold;
             cursor: pointer;
             outline: none;
         }
+
         #handbook-content-container .handbook-entry {
             padding: 0 15px 15px 15px;
             border-top: 1px solid #444;
         }
+
         #handbook-content-container .handbook-entry h4 {
             margin-top: 15px;
             color: #48bb78;
         }
+
         #handbook-content-container .handbook-entry p {
             color: #ccc;
             line-height: 1.6;
@@ -309,18 +317,22 @@
             transform-origin: 0 0;
             transform: rotate(-90deg) translateX(-50%);
             z-index: 11;
-            display: none; /* Hide completely if not supported */
-            opacity: 0.3; /* Faded by default */
+            display: none;
+            /* Hide completely if not supported */
+            opacity: 0.3;
+            /* Faded by default */
             pointer-events: none;
             transition: opacity 0.5s ease;
         }
 
         .focus-slider-container.supported {
-            display: block; /* Show if feature is supported */
+            display: block;
+            /* Show if feature is supported */
         }
 
         .focus-slider-container.visible {
-            opacity: 1; /* Fully visible and interactive in manual mode */
+            opacity: 1;
+            /* Fully visible and interactive in manual mode */
             pointer-events: all;
         }
 
@@ -345,8 +357,8 @@
             background: #fff;
             border-radius: 50%;
             cursor: pointer;
-            border: 3px solid rgba(0,0,0,0.5);
-            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            border: 3px solid rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
         }
 
         #focus-distance::-moz-range-thumb {
@@ -355,7 +367,7 @@
             background: #fff;
             border-radius: 50%;
             cursor: pointer;
-            border: 3px solid rgba(0,0,0,0.5);
+            border: 3px solid rgba(0, 0, 0, 0.5);
         }
 
         /* Install Toast */
@@ -376,13 +388,16 @@
             width: 90%;
             max-width: 500px;
         }
+
         .toast.visible {
             transform: translate(-50%, 0);
         }
+
         .toast-buttons {
             display: flex;
             gap: 10px;
         }
+
         .toast button {
             background: none;
             border: none;
@@ -393,29 +408,65 @@
             border-radius: 8px;
             transition: background-color 0.2s ease;
         }
+
         .toast button#toast-install-btn {
             background: #48bb78;
             font-weight: bold;
         }
+
         .toast button:hover {
             background: rgba(255, 255, 255, 0.1);
         }
 
         /* Color Grading Filters */
-        .grade-noir { filter: grayscale(1) contrast(1.2); }
-        .grade-vintage { filter: sepia(0.6) contrast(1.05) brightness(1.05) saturate(1.1); }
-        .grade-bleach-bypass { filter: contrast(1.4) saturate(0.5); }
-        .grade-teal-orange { filter: contrast(1.05) saturate(1.2) sepia(.2) hue-rotate(-10deg); }
-        .grade-matrix { filter: grayscale(1) contrast(1.2) brightness(0.9) sepia(1) hue-rotate(60deg) saturate(2.5); }
-        .grade-kgf { filter: contrast(1.5) saturate(0.6) sepia(0.4) brightness(0.9); }
-        .grade-salaar { filter: contrast(1.4) saturate(0.3) brightness(0.95) sepia(0.1) hue-rotate(10deg); }
-        .grade-empuraan { filter: contrast(1.6) brightness(0.85) saturate(1.5) sepia(0.3) hue-rotate(-20deg); }
-        .grade-meiyazhagan { filter: contrast(0.95) saturate(1.1) brightness(1.05) sepia(0.1); }
+        .grade-noir {
+            filter: grayscale(1) contrast(1.2);
+        }
+
+        .grade-vintage {
+            filter: sepia(0.6) contrast(1.05) brightness(1.05) saturate(1.1);
+        }
+
+        .grade-bleach-bypass {
+            filter: contrast(1.4) saturate(0.5);
+        }
+
+        .grade-teal-orange {
+            filter: contrast(1.05) saturate(1.2) sepia(.2) hue-rotate(-10deg);
+        }
+
+        .grade-matrix {
+            filter: grayscale(1) contrast(1.2) brightness(0.9) sepia(1) hue-rotate(60deg) saturate(2.5);
+        }
+
+        .grade-kgf {
+            filter: contrast(1.5) saturate(0.6) sepia(0.4) brightness(0.9);
+        }
+
+        .grade-salaar {
+            filter: contrast(1.4) saturate(0.3) brightness(0.95) sepia(0.1) hue-rotate(10deg);
+        }
+
+        .grade-empuraan {
+            filter: contrast(1.6) brightness(0.85) saturate(1.5) sepia(0.3) hue-rotate(-20deg);
+        }
+
+        .grade-meiyazhagan {
+            filter: contrast(0.95) saturate(1.1) brightness(1.05) sepia(0.1);
+        }
 
         @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
         }
 
         /* Hide UI elements when in fullscreen and no interaction */
@@ -460,11 +511,17 @@
 
         <div class="top-controls">
             <button class="control-btn" id="handbook-btn" title="Filmmaking Handbook">
-                <svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z" />
+                </svg>
             </button>
             <div class="top-right-controls">
                 <button class="control-btn" id="settings-btn" title="Settings">
-                    <svg viewBox="0 0 24 24"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" />
+                    </svg>
                 </button>
             </div>
         </div>
@@ -475,14 +532,25 @@
 
         <div class="controls">
             <button class="control-btn" id="toggle-camera" title="Switch Camera">
-                <svg viewBox="0 0 24 24"><path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5L18.5 12 15 15.5z"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5L18.5 12 15 15.5z" />
+                </svg>
             </button>
             <button class="control-btn" id="record" title="Record Video">
-                <svg class="record-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#ff4545"/></svg>
-                <svg class="stop-icon" viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1" fill="#ff4545"/></svg>
+                <svg class="record-icon" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="7" fill="#ff4545" />
+                </svg>
+                <svg class="stop-icon" viewBox="0 0 24 24">
+                    <rect x="8" y="8" width="8" height="8" rx="1" fill="#ff4545" />
+                </svg>
             </button>
             <button class="control-btn" id="capture" title="Capture Photo">
-                <svg viewBox="0 0 24 24"><path d="M12 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-10c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M12 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-10c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z" />
+                    <circle cx="12" cy="12" r="3" />
+                </svg>
             </button>
         </div>
 
@@ -801,17 +869,92 @@
 
                     const canvasVideoTrack = canvas.captureStream(settings.frameRate || 30).getVideoTracks()[0];
                     const audioTrack = stream.getAudioTracks()[0];
-                    
+
                     const tracks = [canvasVideoTrack];
                     if (audioTrack) {
                         tracks.push(audioTrack);
                     }
                     destinationStream = new MediaStream(tracks);
 
+                    const gradingDefinitions = {
+                        'noir': [
+                            { mode: 'saturation', color: '#000000' }, // Grayscale
+                            { mode: 'overlay', color: 'rgba(0,0,0,0.4)' }, // High contrast
+                            { mode: 'multiply', color: 'rgba(0,0,0,0.2)' } // Darker
+                        ],
+                        'vintage': [
+                            { mode: 'color', color: 'rgba(112, 66, 20, 0.4)' }, // Sepia tint
+                            { mode: 'soft-light', color: 'rgba(255, 240, 200, 0.3)' }, // Warmth
+                            { mode: 'multiply', color: 'rgba(255, 255, 255, 0.1)' } // Brightness adj
+                        ],
+                        'bleach-bypass': [
+                            { mode: 'saturation', color: '#555555' }, // Desaturate
+                            { mode: 'overlay', color: 'rgba(255,255,255,0.3)' }, // Contrast highlights
+                            { mode: 'multiply', color: 'rgba(0,0,0,0.3)' } // Contrast shadows
+                        ],
+                        'teal-orange': [
+                            // Gradient map approximation
+                            { mode: 'overlay', gradient: { stops: [[0, 'rgba(0, 128, 128, 0.6)'], [1, 'rgba(255, 165, 0, 0.6)']], type: 'linear' } }
+                        ],
+                        'matrix': [
+                            { mode: 'saturation', color: '#000000' }, // Grayscale
+                            { mode: 'overlay', color: '#00ff00' }, // Green tint
+                            { mode: 'multiply', color: 'rgba(0, 50, 0, 0.4)' } // Darken
+                        ],
+                        'kgf': [
+                            { mode: 'color', color: 'rgba(180, 140, 60, 0.5)' }, // Gold tint
+                            { mode: 'multiply', color: 'rgba(20, 10, 0, 0.4)' }, // Gritty dark
+                            { mode: 'overlay', color: 'rgba(200, 150, 50, 0.2)' } // Boost contrast
+                        ],
+                        'salaar': [
+                            { mode: 'saturation', color: '#333333' }, // Desaturate
+                            { mode: 'multiply', color: 'rgba(20, 30, 40, 0.5)' }, // Dark blue/grey
+                            { mode: 'hard-light', color: 'rgba(0, 0, 0, 0.3)' } // Harsh contrast
+                        ],
+                        'empuraan': [
+                            { mode: 'multiply', color: 'rgba(50, 20, 10, 0.5)' }, // Dark warm
+                            { mode: 'overlay', color: 'rgba(255, 100, 50, 0.4)' }, // Fiery highlights
+                            { mode: 'saturation', color: 'rgba(255, 100, 50, 0.5)' } // Boost saturation
+                        ],
+                        'meiyazhagan': [
+                            { mode: 'soft-light', color: 'rgba(255, 240, 220, 0.3)' }, // Gentle warm
+                            { mode: 'screen', color: 'rgba(255, 200, 150, 0.1)' } // Glow
+                        ]
+                    };
+
+                    function applyCanvasGrading(ctx, width, height, gradeName) {
+                        const layers = gradingDefinitions[gradeName];
+                        if (!layers) return;
+
+                        layers.forEach(layer => {
+                            ctx.globalCompositeOperation = layer.mode;
+                            if (layer.gradient) {
+                                const grad = ctx.createLinearGradient(0, 0, width, height);
+                                layer.gradient.stops.forEach(stop => grad.addColorStop(stop[0], stop[1]));
+                                ctx.fillStyle = grad;
+                            } else {
+                                ctx.fillStyle = layer.color;
+                            }
+                            ctx.fillRect(0, 0, width, height);
+                        });
+                        ctx.globalCompositeOperation = 'source-over';
+                    }
+
+                    // ... existing code ...
+
                     function canvasLoop() {
-                        if (!applyGradeToVideo) return; 
-                        canvasCtx.filter = getComputedStyle(video).filter;
+                        if (!applyGradeToVideo) return;
+
+                        // Draw raw video frame
+                        canvasCtx.globalCompositeOperation = 'source-over';
                         canvasCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        // Apply fast canvas-based grading
+                        const currentGrade = colorGradingSelect.value;
+                        if (currentGrade !== 'none') {
+                            applyCanvasGrading(canvasCtx, canvas.width, canvas.height, currentGrade);
+                        }
+
                         canvasLoopId = requestAnimationFrame(canvasLoop);
                     }
                     canvasLoopId = requestAnimationFrame(canvasLoop);
@@ -839,7 +982,7 @@
                 } else {
                     focusSliderContainer.classList.remove('visible');
                 }
-                await startCamera(); 
+                await startCamera();
             });
 
             focusDistanceSlider.addEventListener('input', () => {
@@ -857,12 +1000,12 @@
             if (!stream || currentFocusMode !== 'manual') return;
             const track = stream.getVideoTracks()[0];
             const capabilities = track.getCapabilities();
-            
+
             if (capabilities.focusDistance) {
                 const min = capabilities.focusDistance.min || 0;
                 const max = capabilities.focusDistance.max || 1;
                 const scaledDistance = min + (currentFocusDistance * (max - min));
-                
+
                 try {
                     await track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: scaledDistance }] });
                 } catch (error) {
@@ -905,7 +1048,7 @@
                 const details = document.createElement('details');
                 const summary = document.createElement('summary');
                 summary.textContent = category.title;
-                
+
                 const entryContainer = document.createElement('div');
                 entryContainer.className = 'handbook-entry';
 
@@ -962,6 +1105,25 @@
             }
         });
 
+        // Video Recording State
+        let recorderWorker = null;
+
+        // Initialize Worker
+        function initWorker() {
+            recorderWorker = new Worker('recorder.worker.js');
+            recorderWorker.onmessage = (event) => {
+                if (event.data.type === 'closed') {
+                    statusText.textContent = 'Video saved';
+                    setTimeout(() => { statusText.textContent = 'Ready'; }, 3000);
+                    fileHandle = null;
+                } else if (event.data.type === 'error') {
+                    console.error('Worker reported error:', event.data.error);
+                    statusText.textContent = 'Save failed';
+                }
+            };
+        }
+        initWorker();
+
         // Start video recording
         async function startRecording() {
             try {
@@ -990,33 +1152,27 @@
                     console.log("Recording raw video without color grade.");
                 }
 
-                writableStream = await fileHandle.createWritable();
+                // Create WritableStream and transfer to worker
+                const writable = await fileHandle.createWritable();
+                recorderWorker.postMessage({
+                    type: 'init',
+                    payload: { writableStream: writable }
+                }, [writable]);
+
                 const options = { mimeType: 'video/webm; codecs=vp9,opus', videoBitsPerSecond: optimalBitrate };
                 mediaRecorder = new MediaRecorder(streamToRecord, options);
 
-                mediaRecorder.ondataavailable = async (event) => {
-                    if (event.data.size > 0 && writableStream) {
-                        try {
-                            await writableStream.write(event.data);
-                        } catch (error) {
-                            console.error('Error writing to file:', error);
-                            stopRecording();
-                        }
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recorderWorker.postMessage({
+                            type: 'write',
+                            payload: { data: event.data }
+                        });
                     }
                 };
 
-                mediaRecorder.onstop = async () => {
-                    if (writableStream) {
-                        try {
-                            await writableStream.close();
-                        } catch (error) {
-                            console.error('Error closing file:', error);
-                        }
-                    }
-                    writableStream = null;
-                    fileHandle = null;
-                    statusText.textContent = 'Video saved';
-                    setTimeout(() => { statusText.textContent = 'Ready'; }, 3000);
+                mediaRecorder.onstop = () => {
+                    recorderWorker.postMessage({ type: 'close' });
                 };
 
                 mediaRecorder.start(1000);
@@ -1041,7 +1197,6 @@
                 mediaRecorder.stop();
                 playAudioFeedback('stop');
                 isRecording = false;
-                // The canvas loop now stops itself, so no need to call stopCanvasProcessing() here.
                 recordButton.classList.remove('recording');
                 recordingIndicator.style.display = 'none';
                 clearInterval(recordingInterval);
