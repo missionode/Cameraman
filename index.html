@@ -1198,17 +1198,16 @@
                 updateDynamicIsland("Speech API Supported");
 
                 recognition = new SpeechRecognition();
-                recognition.continuous = false; // [FIX] Pulse mode is more robust on mobile
+                recognition.continuous = true; // [FIX] Restore continuous for smooth "Action"
                 recognition.lang = 'en-US';
-                recognition.interimResults = true; // Enable partial results for debug
+                recognition.interimResults = true;
                 recognition.maxAlternatives = 1;
 
                 recognition.onresult = (event) => {
-                    // In non-continuous mode, we usually care about the first result
-                    const result = event.results[0]; // Still safest for robust access
+                    const result = event.results[event.results.length - 1]; // Continuous mode: get last result
                     const transcript = result[0].transcript.trim().toLowerCase();
                     const isFinal = result.isFinal;
-                    
+
                     console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
 
                     // Debug Feedback
@@ -1227,8 +1226,7 @@
                 };
 
                 recognition.onstart = () => {
-                    console.log("Mic Active");
-                    // Suppress UI spam in pulse mode
+                    updateDynamicIsland("Mic Active - Speak Now");
                 };
 
                 recognition.onerror = (event) => {
@@ -1244,10 +1242,7 @@
 
                 recognition.onend = () => {
                     if (directorModeEnabled && !isHandingOverMic) {
-                        // Small delay to prevent CPU thrash
-                        setTimeout(() => {
-                           try { recognition.start(); } catch(e){}
-                        }, 200);
+                        recognition.start();
                     }
                 };
             } else {
@@ -1464,6 +1459,19 @@
                     ...destinationStream.getVideoTracks(),
                     audioTrack
                 ]);
+
+                // 4. [FIX] Attempt to Resume Director Mode (Listen for "Thank You")
+                if (directorModeEnabled) {
+                    setTimeout(() => {
+                        isHandingOverMic = false;
+                        try {
+                            recognition.start();
+                            updateDynamicIsland("Listening for 'Thank You'");
+                        } catch (e) {
+                            console.warn("Could not resume listening during recording (OS blocked shared mic)", e);
+                        }
+                    }, 1000); // Wait 1s for recorder to stabilize
+                }
 
                 // Update destinationStream for this session
                 // actually we can just use combinedStream for MediaRecorder
