@@ -1198,16 +1198,17 @@
                 updateDynamicIsland("Speech API Supported");
 
                 recognition = new SpeechRecognition();
-                recognition.continuous = true;
+                recognition.continuous = false; // [FIX] Pulse mode is more robust on mobile
                 recognition.lang = 'en-US';
                 recognition.interimResults = true; // Enable partial results for debug
                 recognition.maxAlternatives = 1;
 
                 recognition.onresult = (event) => {
-                    const result = event.results[event.results.length - 1];
+                    // In non-continuous mode, we usually care about the first result
+                    const result = event.results[0]; // Still safest for robust access
                     const transcript = result[0].transcript.trim().toLowerCase();
                     const isFinal = result.isFinal;
-
+                    
                     console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
 
                     // Debug Feedback
@@ -1226,7 +1227,8 @@
                 };
 
                 recognition.onstart = () => {
-                    updateDynamicIsland("Mic Active - Speak Now");
+                    console.log("Mic Active");
+                    // Suppress UI spam in pulse mode
                 };
 
                 recognition.onerror = (event) => {
@@ -1242,7 +1244,10 @@
 
                 recognition.onend = () => {
                     if (directorModeEnabled && !isHandingOverMic) {
-                        recognition.start();
+                        // Small delay to prevent CPU thrash
+                        setTimeout(() => {
+                           try { recognition.start(); } catch(e){}
+                        }, 200);
                     }
                 };
             } else {
