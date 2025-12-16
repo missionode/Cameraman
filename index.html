@@ -1400,47 +1400,169 @@
             updateDynamicIsland("Mic Swapping...");
             isSwitchingMode = true;
 
-            // If already stopped, just resolve
-            try {
-                // Check if running using a private prop check or just try stop
-                // There is no standard .state property, but we can rely on events.
+            return new Promise(resolve => {
+                let resolved = false;
+                const safetyTimeout = setTimeout(() => {
+                    if (!resolved) {
+                        console.warn("Speech stop timed out, forcing proceed");
+                        resolved = true;
+                        resolve();
+                    }
+                }, 1500);
 
-                return new Promise(resolve => {
-                    let resolved = false;
-                    const safetyTimeout = setTimeout(() => {
+                // Hook one-time listener to confirm it actually stopped
+                if (recognition) {
+                    recognition.onend = () => {
                         if (!resolved) {
-                            console.warn("Speech stop timed out, forcing proceed");
-                            resolved = true;
-                            resolve();
-                        }
-                    }, 2000); // 2s max wait
-
-                    // Hook one-time listener
-                    const originalOnEnd = recognition.onend;
-                    recognition.onend = (e) => {
-                        if (!resolved) {
-                            console.log("Speech released gracefully");
+                            console.log("Speech released (onend)");
                             clearTimeout(safetyTimeout);
                             resolved = true;
                             resolve();
                         }
                     };
 
+                    // NUCLEAR: Abort and Destroy to force OS release
                     try {
-                        recognition.stop(); // Try graceful stop first
-                        // If it doesn't fire onend quickly (e.g. already stopped), the safety timeout handles it
-                        // Or we can abort if stop is too slow?
-                        setTimeout(() => {
-                            if (!resolved && recognition) recognition.abort();
-                        }, 500);
+                        recognition.abort();
+                        recognition = null; // Mark as null immediately so we don't try to use it
                     } catch (e) {
-                        // If error calling stop, just resolve
                         resolve();
                     }
-                });
+                } else {
+                    resolve();
+                }
+            });
+        }
+
+        async function getAudioStreamWithRetry(retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    return await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true }
+                    });
+                } catch (e) {
+                    console.warn(`Audio Access Attempt ${i + 1} failed:`, e);
+                    if (i === retries - 1) throw e;
+                    await new Promise(r => setTimeout(r, 500)); // Wait 500ms before retry
+                }
+            }
+        }
+
+        async function startRecording() {
+            if (isRecording) return;
+
+            // 1. [FIX] Graceful Mic Handoff
+            await prepareMicForRecording();
+
+            // Additional small delay for OS audio layer to settle
+            await new Promise(r => setTimeout(r, 300));
+
+            try {
+                const mimeType = getSupportedMimeType();
+                const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+
+                // Auto-Save logic for Director Mode
+                if (directorModeEnabled && directorDirectoryHandle) {
+                    const filename = `take-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`;
+                    try {
+                        fileHandle = await directorDirectoryHandle.getFileHandle(filename, { create: true });
+                    } catch (err) {
+                        throw new Error("Storage Access Error: " + err.message);
+                    }
+                } else {
+                    // Manual Mode
+                    try {
+                        fileHandle = await window.showSaveFilePicker({
+                            suggestedName: `video-${Date.now()}.${extension}`,
+                            types: [{
+                                description: 'Video File',
+                                accept: { [mimeType.split(';')[0]]: ['.' + extension] }
+                            }]
+                        });
+                    } catch (err) {
+                        if (err.name === 'AbortError') return; // User cancelled
+                        throw err;
+                    }
+                }
+
+                const writable = await fileHandle.createWritable();
+
+                // 2. [FIX] Request Audio Stream with RETRY
+                let audioStream;
+                try {
+                    audioStream = await getAudioStreamWithRetry();
+                } catch (err) {
+                    throw new Error("Mic Busy: " + err.message);
+                }
+
+                // 3. Combine with Video
+                const audioTrack = audioStream.getAudioTracks()[0];
+                const combinedStream = new MediaStream([
+                    ...destinationStream.getVideoTracks(),
+                    audioTrack
+                ]);
+
+                if (directorModeEnabled) {
+                    updateDynamicIsland("Recording (Tap to Stop)");
+                }
+
+                mediaRecorder = new MediaRecorder(combinedStream, { mimeType: mimeType, videoBitsPerSecond: 10000000 });
+
+                // Store audio track to stop it later
+                mediaRecorder.audioTrack = audioTrack;
+                mediaRecorder.ondataavailable = async (e) => {
+                    if (e.data.size > 0) {
+                        try {
+                            await writable.write(e.data);
+                            diIndicator.style.opacity = (diIndicator.style.opacity === '1' ? '0.5' : '1');
+                        } catch (err) {
+                            console.error("Write error:", err);
+                            updateDynamicIsland("Error", "Write Failed", "red");
+                        }
+                    }
+                };
+                mediaRecorder.onstop = async () => {
+                    try {
+                        await writable.close();
+                        console.log("File closed successfully.");
+
+                        // [FIX] Stop Audio Track to release Mic
+                        if (mediaRecorder.audioTrack) {
+                            mediaRecorder.audioTrack.stop();
+                        }
+
+                        // [FIX] Restore Director Mode if needed
+                        restoreMicAfterRecording();
+
+                    } catch (err) { console.error("File Close Error", err); }
+
+                    isRecording = false;
+                    recordBtnInner.classList.remove('recording');
+                    diTimerContainer.classList.add('hidden');
+                    updateDynamicIsland("Saved", "", "green");
+                };
+
+                mediaRecorder.start(1000);
+                isRecording = true;
+                recordingStartTime = Date.now();
+
+                dynamicIsland.classList.add('recording');
+                diTimerContainer.classList.remove('hidden');
+                recordBtnInner.classList.add('recording');
+                updateDynamicIsland('Recording', '', 'red');
+                updateTimer();
+
             } catch (e) {
-                console.warn("Mic Prep Error", e);
-                return;
+                console.error(e);
+                // Show specific error in UI
+                let msg = "Start Failed";
+                if (e.message.includes("Mic Busy")) msg = "Mic Busy (Retry)";
+                if (e.message.includes("Storage")) msg = "Check Folder";
+
+                updateDynamicIsland("Error", msg, "red");
+
+                // If start failed, ensure we restore mic
+                restoreMicAfterRecording();
             }
         }
 
@@ -1524,104 +1646,6 @@
                 }
             }, 'image/png');
         };
-
-        async function startRecording() {
-            if (isRecording) return;
-
-            // 1. [FIX] Graceful Mic Handoff
-            await prepareMicForRecording();
-
-            try {
-                const mimeType = getSupportedMimeType();
-                const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
-
-                // Auto-Save logic for Director Mode
-                if (directorModeEnabled && directorDirectoryHandle) {
-                    const filename = `take-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`;
-                    fileHandle = await directorDirectoryHandle.getFileHandle(filename, { create: true });
-                } else {
-                    // Manual Mode
-                    fileHandle = await window.showSaveFilePicker({
-                        suggestedName: `video-${Date.now()}.${extension}`,
-                        types: [{
-                            description: 'Video File',
-                            accept: { [mimeType.split(';')[0]]: ['.' + extension] }
-                        }]
-                    });
-                }
-
-                const writable = await fileHandle.createWritable();
-
-                // 2. [FIX] Request Audio Stream JUST for Recording
-                // This call should now succeed because SpeechRecog has released the mic
-                const audioStream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: true, noiseSuppression: true }
-                });
-
-                // 3. Combine with Video
-                const audioTrack = audioStream.getAudioTracks()[0];
-                const combinedStream = new MediaStream([
-                    ...destinationStream.getVideoTracks(),
-                    audioTrack
-                ]);
-
-                if (directorModeEnabled) {
-                    updateDynamicIsland("Recording (Tap to Stop)");
-                }
-
-                mediaRecorder = new MediaRecorder(combinedStream, { mimeType: mimeType, videoBitsPerSecond: 10000000 });
-
-                // Store audio track to stop it later
-                mediaRecorder.audioTrack = audioTrack;
-                mediaRecorder.ondataavailable = async (e) => {
-                    if (e.data.size > 0) {
-                        try {
-                            await writable.write(e.data);
-                            diIndicator.style.opacity = (diIndicator.style.opacity === '1' ? '0.5' : '1');
-                        } catch (err) {
-                            console.error("Write error:", err);
-                            updateDynamicIsland("Error", "Write Failed", "red");
-                        }
-                    }
-                };
-                mediaRecorder.onstop = async () => {
-                    try {
-                        await writable.close();
-                        console.log("File closed successfully.");
-
-                        // [FIX] Stop Audio Track to release Mic
-                        if (mediaRecorder.audioTrack) {
-                            mediaRecorder.audioTrack.stop();
-                        }
-
-                        // [FIX] Restore Director Mode if needed
-                        restoreMicAfterRecording();
-
-                    } catch (err) { console.error("File Close Error", err); }
-
-                    isRecording = false;
-                    recordBtnInner.classList.remove('recording');
-                    diTimerContainer.classList.add('hidden');
-                    updateDynamicIsland("Saved", "", "green");
-                };
-
-                mediaRecorder.start(1000);
-                isRecording = true;
-                recordingStartTime = Date.now();
-
-                dynamicIsland.classList.add('recording');
-                diTimerContainer.classList.remove('hidden');
-                recordBtnInner.classList.add('recording');
-                updateDynamicIsland('Recording', '', 'red');
-                updateTimer();
-
-            } catch (e) {
-                console.error(e);
-                updateDynamicIsland("Error", "Start Failed", "red");
-                // If start failed, ensure we restore mic
-                restoreMicAfterRecording();
-            }
-        }
 
         function stopRecording() {
             if (!isRecording) return;
