@@ -1264,7 +1264,12 @@
                 };
 
                 recognition.onend = () => {
-                    console.log("Speech Recognition: Ended");
+                    // Ensure we don't handle this if we are in the middle of a controlled handover
+                    // The local onend handler in startRecording will handle the resolution there.
+                    // But wait, re-assigning onend inside startRecording removes THIS handler? 
+                    // YES. That is actually desired during handover. We restore it later.
+
+                    console.log("Speech Recognition: Ended (Global)");
 
                     if (directorModeEnabled && !isHandingOverMic) {
                         // [CRITICAL FIX] Prevent Infinite Loops / Overheating
@@ -1464,20 +1469,41 @@
         async function startRecording() {
             if (isRecording) return;
 
-            // 1. [FIX] Pause Director Mode (Release Mic)
+            // 1. [FIX] Pause Director Mode (Release Mic) - ROBUST MOBILE FIX
             if (directorModeEnabled && recognition) {
                 isHandingOverMic = true; // Prevents onend from auto-restarting immediately
-                try {
-                    recognition.stop();
-                    console.log("Stopping speech for mic handover...");
-                } catch (e) {
-                    console.warn("Failed to stop recognition", e);
-                }
                 updateDynamicIsland("Mic Swapping...");
 
-                // [FIX] Wait for Mic to fully release on Android
-                // Increased wait slightly and added safety check
-                await new Promise(r => setTimeout(r, 400));
+                try {
+                    // [MOBILE FIX] We MUST wait for the 'onend' event.
+                    // Just calling stop() is not enough on Android; the resource isn't freed until 'onend' fires.
+                    await new Promise((resolve, reject) => {
+                        const safetyTimeout = setTimeout(() => {
+                            console.warn("Speech stop timed out, forcing proceed...");
+                            resolve(); // Force proceed if it hangs
+                        }, 2000);
+
+                        recognition.onend = () => {
+                            clearTimeout(safetyTimeout);
+                            console.log("Speech Recognition: Ended (Handover Complete)");
+                            resolve();
+                            // We intentionally do NOT call the original onend logic here
+                            // The global onend handler might trigger, but 'isHandingOverMic' blocks restart.
+                        };
+
+                        try {
+                            recognition.stop();
+                        } catch (e) {
+                            console.warn("Stop failed (maybe already stopped)", e);
+                            resolve();
+                        }
+                    });
+                    // [EXTRA SAFETY] Small buffer after onend for OS audio routing
+                    await new Promise(r => setTimeout(r, 200));
+
+                } catch (e) {
+                    console.warn("Mic release flow error", e);
+                }
             }
 
             try {
@@ -1519,6 +1545,18 @@
                         // Only try to resume if we are still recording!
                         if (isRecording) {
                             isHandingOverMic = false;
+
+                            // Restore global onend logic first!
+                            if (recognition) {
+                                recognition.onend = () => {
+                                    console.log("Speech Recognition: Ended (Global Restored)");
+                                    if (directorModeEnabled && !isHandingOverMic) {
+                                        // Reuse standard restart logic
+                                        try { recognition.start(); } catch (e) { }
+                                    }
+                                };
+                            }
+
                             try {
                                 lastSpeechEndTime = Date.now(); // Reset timer to avoid backoff immediately
                                 recognition.start();
