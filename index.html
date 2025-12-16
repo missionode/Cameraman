@@ -1269,10 +1269,10 @@
 
                 if (isFinal) {
                     let commandTriggered = false;
-                    if ((transcript.includes('action') || transcript.includes('start') || transcript.includes('shoot')) && !isRecording) {
+                    if ((/^(action|start|shoot)$/i.test(transcript)) && !isRecording) {
                         startRecordingWithCountdown();
                         commandTriggered = true;
-                    } else if ((transcript.includes('thank you') || transcript.includes('cut') || transcript.includes('stop')) && isRecording) {
+                    } else if ((/^(thank you|cut|stop)$/i.test(transcript)) && isRecording) {
                         stopRecordingWithCountdown();
                         commandTriggered = true;
                     }
