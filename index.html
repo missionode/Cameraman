@@ -1196,109 +1196,107 @@
         // --- DIRECTOR MODE ---
         function setupDirectorMode() {
             if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                // VISUAL DEBUG: Report Support
-                console.log("Speech API Supported");
-
-                recognition = new SpeechRecognition();
-                recognition.continuous = true;
-                recognition.lang = 'en-US';
-                recognition.interimResults = true;
-                recognition.maxAlternatives = 1;
-
-                recognition.onresult = (event) => {
-                    const result = event.results[event.resultIndex];
-                    const transcript = result[0].transcript.trim().toLowerCase();
-                    const isFinal = result.isFinal;
-
-                    console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
-
-                    if (isFinal || transcript.length > 3) {
-                        // Only show meaningful updates
-                        if (!isRecording || transcript.includes('thank') || transcript.includes('cut')) {
-                            updateDynamicIsland(`Heard: "${transcript}"`);
-                        }
-                    }
-
-                    // Only trigger action on FINAL results
-                    if (isFinal) {
-                        let commandTriggered = false;
-                        if ((transcript.includes('action') || transcript.includes('start') || transcript.includes('shoot')) && !isRecording) {
-                            startRecordingWithCountdown();
-                            commandTriggered = true;
-                        } else if ((transcript.includes('thank you') || transcript.includes('cut') || transcript.includes('stop')) && isRecording) {
-                            stopRecordingWithCountdown();
-                            commandTriggered = true;
-                        }
-
-                        // [FIX] Session Reset: Abort to clear history to prevent stale buffer matches
-                        if (commandTriggered) {
-                            console.log("Command triggered, resetting session...");
-                            recognition.abort();
-                            // abort() triggers onend, which handles restart
-                        }
-                    }
-                };
-
-                recognition.onstart = () => {
-                    console.log("Speech Recognition: Started");
-                    if (!isRecording) updateDynamicIsland("Mic Active - Speak Now");
-                };
-
-                recognition.onerror = (event) => {
-                    console.error("Speech Recognition Error", event.error);
-
-                    // Specific handling
-                    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                        console.error("Speech Permission Denied - Disabling Director Mode to prevent loop");
-                        directorModeEnabled = false;
-                        document.getElementById('director-mode-toggle').checked = false;
-                        updateDynamicIsland("Mic Denied", "Director Mode Off", "red");
-                        return; // Do not restart
-                    }
-
-                    // If 'no-speech' or 'network', we might want to ignore visual update
-                    // [FIX] Also ignore 'aborted' because we trigger it intentionally during handover
-                    if (event.error !== 'no-speech' && event.error !== 'aborted') {
-                        updateDynamicIsland(`Mic Error: ${event.error}`, '', 'orange');
-                    }
-                };
-
-                recognition.onend = () => {
-                    // Ensure we don't handle this if we are in the middle of a controlled handover
-                    // The local onend handler in startRecording will handle the resolution there.
-                    // But wait, re-assigning onend inside startRecording removes THIS handler? 
-                    // YES. That is actually desired during handover. We restore it later.
-
-                    console.log("Speech Recognition: Ended (Global)");
-
-                    if (directorModeEnabled && !isHandingOverMic) {
-                        // [CRITICAL FIX] Prevent Infinite Loops / Overheating
-                        // If it ends too quickly (e.g. error loop), Backoff.
-                        const timeSinceLastEnd = Date.now() - lastSpeechEndTime;
-                        lastSpeechEndTime = Date.now();
-
-                        let delay = 100;
-                        if (timeSinceLastEnd < 1000) {
-                            console.warn("Speech restarted too quickly, applying backoff...", timeSinceLastEnd);
-                            delay = 2000; // 2s cool-down
-                        }
-
-                        clearTimeout(speechRestartTimeout);
-                        speechRestartTimeout = setTimeout(() => {
-                            if (directorModeEnabled && !isHandingOverMic) {
-                                try {
-                                    console.log("Restarting Speech...");
-                                    recognition.start();
-                                } catch (e) { console.error("Restart failed", e); }
-                            }
-                        }, delay);
-                    }
-                };
+                // Initial creation
+                createSpeechRecognition();
             } else {
                 console.warn("Speech Recognition not supported");
                 document.getElementById('director-mode-toggle').disabled = true;
             }
+        }
+
+        function createSpeechRecognition() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) return;
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            if (recognition) {
+                // Cleanup existing if any
+                try { recognition.abort(); } catch (e) { }
+                recognition = null;
+            }
+
+            console.log("Initializing Speech Recognition Instance...");
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.lang = 'en-US';
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 1;
+
+            recognition.onresult = (event) => {
+                // Validate existence in case of race condition
+                if (!event.results) return;
+
+                const result = event.results[event.resultIndex];
+                const transcript = result[0].transcript.trim().toLowerCase();
+                const isFinal = result.isFinal;
+
+                console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
+
+                if (isFinal || transcript.length > 3) {
+                    if (!isRecording || transcript.includes('thank') || transcript.includes('cut')) {
+                        updateDynamicIsland(`Heard: "${transcript}"`);
+                    }
+                }
+
+                if (isFinal) {
+                    let commandTriggered = false;
+                    if ((transcript.includes('action') || transcript.includes('start') || transcript.includes('shoot')) && !isRecording) {
+                        startRecordingWithCountdown();
+                        commandTriggered = true;
+                    } else if ((transcript.includes('thank you') || transcript.includes('cut') || transcript.includes('stop')) && isRecording) {
+                        stopRecordingWithCountdown();
+                        commandTriggered = true;
+                    }
+
+                    if (commandTriggered && recognition) {
+                        console.log("Command triggered, resetting session...");
+                        try { recognition.abort(); } catch (e) { }
+                    }
+                }
+            };
+
+            recognition.onstart = () => {
+                console.log("Speech Recognition: Started");
+                if (!isRecording) updateDynamicIsland("Mic Active - Speak Now");
+            };
+
+            recognition.onerror = (event) => {
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    console.error("Speech Permission Denied");
+                    directorModeEnabled = false;
+                    document.getElementById('director-mode-toggle').checked = false;
+                    updateDynamicIsland("Mic Denied", "Director Mode Off", "red");
+                    return;
+                }
+                if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                    updateDynamicIsland(`Mic Error: ${event.error}`, '', 'orange');
+                }
+            };
+
+            recognition.onend = () => {
+                console.log("Speech Recognition: Ended (Instance Dead?)", recognition === null);
+                // Only restart if we still have a valid instance AND we are supposed to be active
+                if (directorModeEnabled && recognition && !isRecording) {
+                    // Backoff logic
+                    const timeSinceLastEnd = Date.now() - lastSpeechEndTime;
+                    lastSpeechEndTime = Date.now();
+
+                    let delay = 100;
+                    if (timeSinceLastEnd < 1000) {
+                        delay = 2000;
+                    }
+
+                    clearTimeout(speechRestartTimeout);
+                    speechRestartTimeout = setTimeout(() => {
+                        if (directorModeEnabled && recognition && !isRecording) {
+                            try {
+                                console.log("Restarting Speech...");
+                                recognition.start();
+                            } catch (e) { }
+                        }
+                    }, delay);
+                }
+            };
         }
 
         function startListening() {
@@ -1470,43 +1468,20 @@
         async function startRecording() {
             if (isRecording) return;
 
-            // 1. [FIX] Pause Director Mode (Release Mic) - ROBUST MOBILE FIX
+            // 1. [FIX] NUCLEAR OPTION: Destroy Speech Recognition
+            // This guarantees the Android Audio flinger releases the mic lock.
             if (directorModeEnabled && recognition) {
-                isHandingOverMic = true; // Prevents onend from auto-restarting immediately
                 updateDynamicIsland("Mic Swapping...");
-
                 try {
-                    // [MOBILE FIX] We MUST wait for the 'onend' event.
-                    // Just calling stop() is not enough on Android; the resource isn't freed until 'onend' fires.
-                    await new Promise((resolve, reject) => {
-                        const safetyTimeout = setTimeout(() => {
-                            console.warn("Speech stop timed out, forcing proceed...");
-                            resolve(); // Force proceed if it hangs
-                        }, 2000);
+                    recognition.onend = null; // Prevent callbacks
+                    recognition.onerror = null; // Prevent errors
+                    recognition.abort();
+                    recognition = null; // DESTROY
 
-                        recognition.onend = () => {
-                            clearTimeout(safetyTimeout);
-                            console.log("Speech Recognition: Ended (Handover Complete)");
-                            resolve();
-                            // We intentionally do NOT call the original onend logic here
-                            // The global onend handler might trigger, but 'isHandingOverMic' blocks restart.
-                        };
-
-                        try {
-                            // [FIX] Use abort() instead of stop(). 
-                            // stop() keeps mic open to process final audio.
-                            // abort() kills it immediately. We need the mic NOW.
-                            recognition.abort();
-                        } catch(e) {
-                            console.warn("Abort failed", e);
-                            resolve();
-                        }
-                    });
-                     // [EXTRA SAFETY] Small buffer after onend for OS audio routing
-                    await new Promise(r => setTimeout(r, 200));
-
+                    // Brief wait for OS cleanup (mandatory on Android)
+                    await new Promise(r => setTimeout(r, 600));
                 } catch (e) {
-                    console.warn("Mic release flow error", e);
+                    console.warn("Speech destruction error", e);
                 }
             }
 
@@ -1543,35 +1518,15 @@
                     audioTrack
                 ]);
 
-                // 4. [FIX] Attempt to Resume Director Mode (Listen for "Thank You")
+                // 4. [FIX] No Resume Here.
+                // We destroyed the instance. We will recreate it ONLY after recording stops.
+                // This means "Thank You" voice stop needs a NEW instance, or we skip it for stability.
+
+                // Let's try to RE-CREATE it for "Thank You" listening if possible?
+                // CAUTION: Re-enabling SpeechRecog WHILE recording audio is exactly what fails on Android.
+                // So for maximum stability, we DISABLE voice stop while recording.
                 if (directorModeEnabled) {
-                    setTimeout(() => {
-                        // Only try to resume if we are still recording!
-                        if (isRecording) {
-                            isHandingOverMic = false;
-
-                            // Restore global onend logic first!
-                            if (recognition) {
-                                recognition.onend = () => {
-                                    console.log("Speech Recognition: Ended (Global Restored)");
-                                    if (directorModeEnabled && !isHandingOverMic) {
-                                        // Reuse standard restart logic
-                                        try { recognition.start(); } catch (e) { }
-                                    }
-                                };
-                            }
-
-                            try {
-                                lastSpeechEndTime = Date.now(); // Reset timer to avoid backoff immediately
-                                recognition.start();
-                                updateDynamicIsland("Rec • Say 'Thank You'");
-                            } catch (e) {
-                                console.warn("Could not resume listening during recording (OS blocked shared mic)", e);
-                                // Don't annoy user, just record.
-                                updateDynamicIsland("Recording (No Voice Stop)");
-                            }
-                        }
-                    }, 1000); // Wait 1s for recorder to stabilize
+                    updateDynamicIsland("Recording (Tap to Stop)");
                 }
 
                 // Update destinationStream for this session
@@ -1604,12 +1559,14 @@
                             mediaRecorder.audioTrack.stop();
                         }
 
-                        // [FIX] Resume Director Mode (Re-acquire Mic)
-                        if (directorModeEnabled && recognition) {
+                        // [FIX] Re-Initialize Director Mode (New Instance)
+                        if (directorModeEnabled) {
                             setTimeout(() => {
-                                isHandingOverMic = false; // Reset flag after mic is re-acquired
-                                try { recognition.start(); } catch (e) { }
-                                updateDynamicIsland("Director Mode Ready");
+                                try {
+                                    createSpeechRecognition();
+                                    recognition.start();
+                                    updateDynamicIsland("Director Mode Ready");
+                                } catch (e) { console.warn("Restart director failed", e); }
                             }, 500);
                         }
 
