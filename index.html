@@ -1492,13 +1492,16 @@
                         };
 
                         try {
-                            recognition.stop();
-                        } catch (e) {
-                            console.warn("Stop failed (maybe already stopped)", e);
+                            // [FIX] Use abort() instead of stop(). 
+                            // stop() keeps mic open to process final audio.
+                            // abort() kills it immediately. We need the mic NOW.
+                            recognition.abort();
+                        } catch(e) {
+                            console.warn("Abort failed", e);
                             resolve();
                         }
                     });
-                    // [EXTRA SAFETY] Small buffer after onend for OS audio routing
+                     // [EXTRA SAFETY] Small buffer after onend for OS audio routing
                     await new Promise(r => setTimeout(r, 200));
 
                 } catch (e) {
