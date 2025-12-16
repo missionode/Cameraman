@@ -1258,7 +1258,8 @@
                     }
 
                     // If 'no-speech' or 'network', we might want to ignore visual update
-                    if (event.error !== 'no-speech') {
+                    // [FIX] Also ignore 'aborted' because we trigger it intentionally during handover
+                    if (event.error !== 'no-speech' && event.error !== 'aborted') {
                         updateDynamicIsland(`Mic Error: ${event.error}`, '', 'orange');
                     }
                 };
