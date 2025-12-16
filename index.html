@@ -746,6 +746,8 @@
         let recognition = null;
         let audioCtx = null;
         let directorDirectoryHandle = null;
+        let speechRestartTimeout = null;
+        let lastSpeechEndTime = 0;
 
         let canvasCtx = canvasOutput.getContext('2d', { willReadFrequently: false, alpha: false });
         let currentCrop = { x: 0, y: 0, width: 1, height: 1 };
@@ -1197,64 +1199,94 @@
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 // VISUAL DEBUG: Report Support
                 console.log("Speech API Supported");
-                updateDynamicIsland("Speech API Supported");
 
                 recognition = new SpeechRecognition();
-                recognition.continuous = true; // [FIX] Restore continuous for smooth "Action"
+                recognition.continuous = true;
                 recognition.lang = 'en-US';
                 recognition.interimResults = true;
                 recognition.maxAlternatives = 1;
 
                 recognition.onresult = (event) => {
-                    // [FIX] Use resultIndex to get the specific newer result, not just the last one
                     const result = event.results[event.resultIndex];
                     const transcript = result[0].transcript.trim().toLowerCase();
                     const isFinal = result.isFinal;
 
                     console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
 
-                    // Debug Feedback
                     if (isFinal || transcript.length > 3) {
-                        updateDynamicIsland(`Heard: "${transcript}"`);
+                        // Only show meaningful updates
+                        if (!isRecording || transcript.includes('thank') || transcript.includes('cut')) {
+                            updateDynamicIsland(`Heard: "${transcript}"`);
+                        }
                     }
 
-                    // Only trigger action on FINAL results to avoid false positives
+                    // Only trigger action on FINAL results
                     if (isFinal) {
                         let commandTriggered = false;
                         if ((transcript.includes('action') || transcript.includes('start') || transcript.includes('shoot')) && !isRecording) {
                             startRecordingWithCountdown();
                             commandTriggered = true;
-                        } else if ((transcript.includes('thank you') || transcript.includes('cut')) && isRecording) {
+                        } else if ((transcript.includes('thank you') || transcript.includes('cut') || transcript.includes('stop')) && isRecording) {
                             stopRecordingWithCountdown();
                             commandTriggered = true;
                         }
 
-                        // [FIX] Session Reset: Abort to clear history and force fresh start
+                        // [FIX] Session Reset: Abort to clear history to prevent stale buffer matches
                         if (commandTriggered) {
                             console.log("Command triggered, resetting session...");
                             recognition.abort();
+                            // abort() triggers onend, which handles restart
                         }
                     }
                 };
 
                 recognition.onstart = () => {
-                    updateDynamicIsland("Mic Active - Speak Now");
+                    console.log("Speech Recognition: Started");
+                    if (!isRecording) updateDynamicIsland("Mic Active - Speak Now");
                 };
 
                 recognition.onerror = (event) => {
                     console.error("Speech Recognition Error", event.error);
-                    // Show ALL errors for debugging
-                    updateDynamicIsland(`Mic Error: ${event.error}`, '', 'red');
 
                     // Specific handling
                     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                        alert("Microphone Access Denied. Please reset permissions for this site.");
+                        console.error("Speech Permission Denied - Disabling Director Mode to prevent loop");
+                        directorModeEnabled = false;
+                        document.getElementById('director-mode-toggle').checked = false;
+                        updateDynamicIsland("Mic Denied", "Director Mode Off", "red");
+                        return; // Do not restart
+                    }
+
+                    // If 'no-speech' or 'network', we might want to ignore visual update
+                    if (event.error !== 'no-speech') {
+                        updateDynamicIsland(`Mic Error: ${event.error}`, '', 'orange');
                     }
                 };
 
                 recognition.onend = () => {
+                    console.log("Speech Recognition: Ended");
+
                     if (directorModeEnabled && !isHandingOverMic) {
-                        recognition.start();
+                        // [CRITICAL FIX] Prevent Infinite Loops / Overheating
+                        // If it ends too quickly (e.g. error loop), Backoff.
+                        const timeSinceLastEnd = Date.now() - lastSpeechEndTime;
+                        lastSpeechEndTime = Date.now();
+
+                        let delay = 100;
+                        if (timeSinceLastEnd < 1000) {
+                            console.warn("Speech restarted too quickly, applying backoff...", timeSinceLastEnd);
+                            delay = 2000; // 2s cool-down
+                        }
+
+                        clearTimeout(speechRestartTimeout);
+                        speechRestartTimeout = setTimeout(() => {
+                            if (directorModeEnabled && !isHandingOverMic) {
+                                try {
+                                    console.log("Restarting Speech...");
+                                    recognition.start();
+                                } catch (e) { console.error("Restart failed", e); }
+                            }
+                        }, delay);
                     }
                 };
             } else {
@@ -1434,11 +1466,18 @@
 
             // 1. [FIX] Pause Director Mode (Release Mic)
             if (directorModeEnabled && recognition) {
-                isHandingOverMic = true; // Prevents onend from auto-restarting
-                try { recognition.stop(); } catch (e) { }
+                isHandingOverMic = true; // Prevents onend from auto-restarting immediately
+                try {
+                    recognition.stop();
+                    console.log("Stopping speech for mic handover...");
+                } catch (e) {
+                    console.warn("Failed to stop recognition", e);
+                }
                 updateDynamicIsland("Mic Swapping...");
+
                 // [FIX] Wait for Mic to fully release on Android
-                await new Promise(r => setTimeout(r, 200));
+                // Increased wait slightly and added safety check
+                await new Promise(r => setTimeout(r, 400));
             }
 
             try {
@@ -1477,12 +1516,18 @@
                 // 4. [FIX] Attempt to Resume Director Mode (Listen for "Thank You")
                 if (directorModeEnabled) {
                     setTimeout(() => {
-                        isHandingOverMic = false;
-                        try {
-                            recognition.start();
-                            updateDynamicIsland("Listening for 'Thank You'");
-                        } catch (e) {
-                            console.warn("Could not resume listening during recording (OS blocked shared mic)", e);
+                        // Only try to resume if we are still recording!
+                        if (isRecording) {
+                            isHandingOverMic = false;
+                            try {
+                                lastSpeechEndTime = Date.now(); // Reset timer to avoid backoff immediately
+                                recognition.start();
+                                updateDynamicIsland("Rec • Say 'Thank You'");
+                            } catch (e) {
+                                console.warn("Could not resume listening during recording (OS blocked shared mic)", e);
+                                // Don't annoy user, just record.
+                                updateDynamicIsland("Recording (No Voice Stop)");
+                            }
                         }
                     }, 1000); // Wait 1s for recorder to stabilize
                 }
