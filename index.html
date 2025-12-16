@@ -760,6 +760,7 @@
         let recordingInterval = null;
         let destinationStream = null;
         let uiTimeout = null;
+        let isSwitchingMode = false; // Guard for intentional mic handoff
 
         async function init() {
             try {
@@ -1210,7 +1211,6 @@
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
             if (recognition) {
-                // Cleanup existing if any
                 try { recognition.abort(); } catch (e) { }
                 recognition = null;
             }
@@ -1223,9 +1223,7 @@
             recognition.maxAlternatives = 1;
 
             recognition.onresult = (event) => {
-                // Validate existence in case of race condition
                 if (!event.results) return;
-
                 const result = event.results[event.resultIndex];
                 const transcript = result[0].transcript.trim().toLowerCase();
                 const isFinal = result.isFinal;
@@ -1247,11 +1245,6 @@
                         stopRecordingWithCountdown();
                         commandTriggered = true;
                     }
-
-                    if (commandTriggered && recognition) {
-                        console.log("Command triggered, resetting session...");
-                        try { recognition.abort(); } catch (e) { }
-                    }
                 }
             };
 
@@ -1269,26 +1262,28 @@
                     return;
                 }
                 if (event.error !== 'no-speech' && event.error !== 'aborted') {
-                    updateDynamicIsland(`Mic Error: ${event.error}`, '', 'orange');
+                    // updateDynamicIsland(`Mic Error: ${event.error}`, '', 'orange');
+                    console.warn("Speech Error:", event.error);
                 }
             };
 
             recognition.onend = () => {
-                console.log("Speech Recognition: Ended (Instance Dead?)", recognition === null);
-                // Only restart if we still have a valid instance AND we are supposed to be active
-                if (directorModeEnabled && recognition && !isRecording) {
-                    // Backoff logic
+                console.log("Speech Recognition: Ended");
+
+                if (isSwitchingMode) {
+                    console.log("Intentional text-to-record switch. No restart.");
+                    return;
+                }
+
+                if (directorModeEnabled && !isRecording) {
                     const timeSinceLastEnd = Date.now() - lastSpeechEndTime;
                     lastSpeechEndTime = Date.now();
-
                     let delay = 100;
-                    if (timeSinceLastEnd < 1000) {
-                        delay = 2000;
-                    }
+                    if (timeSinceLastEnd < 1000) delay = 2000;
 
                     clearTimeout(speechRestartTimeout);
                     speechRestartTimeout = setTimeout(() => {
-                        if (directorModeEnabled && recognition && !isRecording) {
+                        if (directorModeEnabled && recognition && !isRecording && !isSwitchingMode) {
                             try {
                                 console.log("Restarting Speech...");
                                 recognition.start();
@@ -1398,6 +1393,71 @@
             show();
         }
 
+        // --- MIC HANDOFF HELPERS ---
+        async function prepareMicForRecording() {
+            if (!directorModeEnabled || !recognition) return;
+
+            updateDynamicIsland("Mic Swapping...");
+            isSwitchingMode = true;
+
+            // If already stopped, just resolve
+            try {
+                // Check if running using a private prop check or just try stop
+                // There is no standard .state property, but we can rely on events.
+
+                return new Promise(resolve => {
+                    let resolved = false;
+                    const safetyTimeout = setTimeout(() => {
+                        if (!resolved) {
+                            console.warn("Speech stop timed out, forcing proceed");
+                            resolved = true;
+                            resolve();
+                        }
+                    }, 2000); // 2s max wait
+
+                    // Hook one-time listener
+                    const originalOnEnd = recognition.onend;
+                    recognition.onend = (e) => {
+                        if (!resolved) {
+                            console.log("Speech released gracefully");
+                            clearTimeout(safetyTimeout);
+                            resolved = true;
+                            resolve();
+                        }
+                    };
+
+                    try {
+                        recognition.stop(); // Try graceful stop first
+                        // If it doesn't fire onend quickly (e.g. already stopped), the safety timeout handles it
+                        // Or we can abort if stop is too slow?
+                        setTimeout(() => {
+                            if (!resolved && recognition) recognition.abort();
+                        }, 500);
+                    } catch (e) {
+                        // If error calling stop, just resolve
+                        resolve();
+                    }
+                });
+            } catch (e) {
+                console.warn("Mic Prep Error", e);
+                return;
+            }
+        }
+
+        function restoreMicAfterRecording() {
+            if (!directorModeEnabled) return;
+
+            isSwitchingMode = false;
+            // Re-create instance to be safe
+            setTimeout(() => {
+                try {
+                    createSpeechRecognition();
+                    recognition.start();
+                    updateDynamicIsland("Director Mode Ready");
+                } catch (e) { console.warn("Restart director failed", e); }
+            }, 500);
+        }
+
         function updateDynamicIsland(text, subtext = '', color = 'green') {
             diStatus.textContent = text + (subtext ? ` | ${subtext}` : '');
             diIndicator.style.background = color === 'red' ? '#ff3b30' : '#4cd964';
@@ -1468,22 +1528,8 @@
         async function startRecording() {
             if (isRecording) return;
 
-            // 1. [FIX] NUCLEAR OPTION: Destroy Speech Recognition
-            // This guarantees the Android Audio flinger releases the mic lock.
-            if (directorModeEnabled && recognition) {
-                updateDynamicIsland("Mic Swapping...");
-                try {
-                    recognition.onend = null; // Prevent callbacks
-                    recognition.onerror = null; // Prevent errors
-                    recognition.abort();
-                    recognition = null; // DESTROY
-
-                    // Brief wait for OS cleanup (mandatory on Android)
-                    await new Promise(r => setTimeout(r, 600));
-                } catch (e) {
-                    console.warn("Speech destruction error", e);
-                }
-            }
+            // 1. [FIX] Graceful Mic Handoff
+            await prepareMicForRecording();
 
             try {
                 const mimeType = getSupportedMimeType();
@@ -1507,6 +1553,7 @@
                 const writable = await fileHandle.createWritable();
 
                 // 2. [FIX] Request Audio Stream JUST for Recording
+                // This call should now succeed because SpeechRecog has released the mic
                 const audioStream = await navigator.mediaDevices.getUserMedia({
                     audio: { echoCancellation: true, noiseSuppression: true }
                 });
@@ -1518,19 +1565,9 @@
                     audioTrack
                 ]);
 
-                // 4. [FIX] No Resume Here.
-                // We destroyed the instance. We will recreate it ONLY after recording stops.
-                // This means "Thank You" voice stop needs a NEW instance, or we skip it for stability.
-
-                // Let's try to RE-CREATE it for "Thank You" listening if possible?
-                // CAUTION: Re-enabling SpeechRecog WHILE recording audio is exactly what fails on Android.
-                // So for maximum stability, we DISABLE voice stop while recording.
                 if (directorModeEnabled) {
                     updateDynamicIsland("Recording (Tap to Stop)");
                 }
-
-                // Update destinationStream for this session
-                // actually we can just use combinedStream for MediaRecorder
 
                 mediaRecorder = new MediaRecorder(combinedStream, { mimeType: mimeType, videoBitsPerSecond: 10000000 });
 
@@ -1538,10 +1575,8 @@
                 mediaRecorder.audioTrack = audioTrack;
                 mediaRecorder.ondataavailable = async (e) => {
                     if (e.data.size > 0) {
-                        // Write directly on Main Thread to avoid DataCloneError
                         try {
                             await writable.write(e.data);
-                            // Visual feedback
                             diIndicator.style.opacity = (diIndicator.style.opacity === '1' ? '0.5' : '1');
                         } catch (err) {
                             console.error("Write error:", err);
@@ -1559,16 +1594,8 @@
                             mediaRecorder.audioTrack.stop();
                         }
 
-                        // [FIX] Re-Initialize Director Mode (New Instance)
-                        if (directorModeEnabled) {
-                            setTimeout(() => {
-                                try {
-                                    createSpeechRecognition();
-                                    recognition.start();
-                                    updateDynamicIsland("Director Mode Ready");
-                                } catch (e) { console.warn("Restart director failed", e); }
-                            }, 500);
-                        }
+                        // [FIX] Restore Director Mode if needed
+                        restoreMicAfterRecording();
 
                     } catch (err) { console.error("File Close Error", err); }
 
@@ -1590,6 +1617,9 @@
 
             } catch (e) {
                 console.error(e);
+                updateDynamicIsland("Error", "Start Failed", "red");
+                // If start failed, ensure we restore mic
+                restoreMicAfterRecording();
             }
         }
 
@@ -1758,6 +1788,30 @@
             });
 
         }
+
+        // --- VISIBILITY HANDLER (Prevent Overheating) ---
+        document.addEventListener('visibilitychange', async () => {
+            if (document.hidden) {
+                // Backgrounded: Stop Camera & Mic
+                if (stream) {
+                    stream.getTracks().forEach(t => t.stop());
+                }
+                if (recognition) {
+                    try { recognition.stop(); } catch (e) { }
+                }
+                console.log("App backgrounded: Paused resources.");
+            } else {
+                // Foregrounded: Restart
+                console.log("App foregrounded: Resuming...");
+                await startCamera();
+                // Face Detector is lazy-loaded/re-used
+
+                if (directorModeEnabled) {
+                    setupDirectorMode(); // Re-bind
+                    startListening();
+                }
+            }
+        });
 
         window.addEventListener('load', init);
     </script>
