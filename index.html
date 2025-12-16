@@ -810,12 +810,44 @@
             }
         }
 
+        async function getCameraCapabilities() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                const audioDevices = devices.filter(device => device.kind === 'audioinput');
+
+                let audioEnabled = false;
+                if (audioDevices.length > 0) {
+                    // Check if we have permission to use the microphone
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        stream.getTracks().forEach(track => track.stop());
+                        audioEnabled = true;
+                    } catch (e) {
+                        // Could not get audio permission
+                    }
+                }
+
+                return {
+                    video: videoDevices.length > 0,
+                    audio: audioEnabled
+                };
+            } catch (e) {
+                return {
+                    video: false,
+                    audio: false
+                };
+            }
+        }
+
         // --- CORE CAMERA ---
         async function startCamera() {
             updateDynamicIsland('Loading...');
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
+
+            const capabilities = await getCameraCapabilities();
 
             const constraints = {
                 video: {
@@ -824,7 +856,7 @@
                     aspectRatio: { ideal: currentAspectRatio },
                     facingMode: currentFacingMode
                 },
-                audio: false // [FIX] Disable initial audio to prevent conflict with Speech Recognition
+                audio: capabilities.audio
             };
 
             try {
