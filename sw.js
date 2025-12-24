@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cameraman-pwa-v6';
+const CACHE_NAME = 'cameraman-pwa-v12';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -6,6 +6,8 @@ const urlsToCache = [
   '/handbook.json',
   '/recorder.worker.js',
   '/video-processor.worker.js',
+  '/ai-v2.worker.js',
+  '/vision_classic.js',
   '/icon-192.svg',
   '/icon-512.svg'
 ];
