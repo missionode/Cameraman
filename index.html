@@ -472,6 +472,47 @@
             margin-left: 2px;
         }
 
+        /* --- Handbook Styling --- */
+        #handbook-content-container h3 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgba(255,255,255,0.5);
+            margin-top: 24px;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        
+        #handbook-content-container h3:first-child { margin-top: 0; }
+
+        .handbook-entry {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 16px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+            transition: background 0.2s;
+        }
+
+        .handbook-entry:active {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .handbook-entry strong {
+            display: block;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: white;
+        }
+
+        .handbook-entry p {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+            margin: 0;
+        }
+
         /* --- Animations --- */
         @keyframes pulse-red {
             0% { opacity: 1; }
