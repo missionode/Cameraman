@@ -1194,7 +1194,7 @@
 
         function processCenterStage() {
             const now = performance.now();
-            if (now - lastDetectionTime < 100) return; // Run faster (10FPS) for responsiveness
+            if (now - lastDetectionTime < 50) return; // Run faster (20FPS) for mobile responsiveness
             lastDetectionTime = now;
 
             const results = faceDetector.detectForVideo(video, now);
