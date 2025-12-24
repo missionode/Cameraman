@@ -964,11 +964,26 @@
                 targetCrop = { x: tx, y: ty, width: w, height: h };
             }
 
-            // Interpolate Crop
-            currentCrop.x += (targetCrop.x - currentCrop.x) * 0.05;
-            currentCrop.y += (targetCrop.y - currentCrop.y) * 0.05;
-            currentCrop.width += (targetCrop.width - currentCrop.width) * 0.05;
-            currentCrop.height += (targetCrop.height - currentCrop.height) * 0.05;
+            // [IMPROVED] Adaptive Tracking Speed (Mobile Tuned)
+            // Calculate distance to target (How far off are we?)
+            const dx = targetCrop.x - currentCrop.x;
+            const dy = targetCrop.y - currentCrop.y;
+            const dw = targetCrop.width - currentCrop.width;
+            
+            // Distance metric (Euclidean-ish)
+            const distance = Math.sqrt(dx*dx + dy*dy + dw*dw);
+
+            // Adaptive Speed Logic:
+            // - Base: 0.08 (Responsive)
+            // - Boost: Exponentially increases with distance to catch fast subjects
+            // - Max: 0.5 (Can cover half the distance in 1 frame)
+            let speed = 0.08 + Math.pow(distance, 1.3) * 4.0;
+            speed = Math.max(0.01, Math.min(0.5, speed));
+
+            currentCrop.x += (targetCrop.x - currentCrop.x) * speed;
+            currentCrop.y += (targetCrop.y - currentCrop.y) * speed;
+            currentCrop.width += (targetCrop.width - currentCrop.width) * speed;
+            currentCrop.height += (targetCrop.height - currentCrop.height) * speed;
 
 
             // --- 2. Send to Worker for Rendering ---
@@ -998,7 +1013,7 @@
 
         function processCenterStage() {
             const now = performance.now();
-            if (now - lastDetectionTime < 100) return; // Run faster (10FPS) for responsiveness
+            if (now - lastDetectionTime < 50) return; // Run faster (20FPS) for mobile responsiveness
             lastDetectionTime = now;
 
             const results = faceDetector.detectForVideo(video, now);
