@@ -644,6 +644,17 @@
                 <small style="display:block; margin-top:4px;">Apply color effects to saved video.</small>
             </div>
 
+            <div class="settings-group">
+                <label>Storage Location</label>
+                <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px;">
+                    <button id="choose-folder-btn" class="control-btn-secondary" style="width: auto; height: 36px; padding: 0 16px; border-radius: 18px; font-size: 14px; background: rgba(255,255,255,0.1);">
+                        Choose Folder
+                    </button>
+                    <span id="folder-name-display" style="font-size: 13px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">Not Set</span>
+                </div>
+                <small style="display:block; margin-top:4px;">Files will save here automatically.</small>
+            </div>
+
             <!-- Hidden groups unless supported -->
             <div class="settings-group" id="focus-control-group" style="display: none;">
                 <label for="focus-mode">Focus Mode</label>
@@ -745,7 +756,7 @@
 
         let recognition = null;
         let audioCtx = null;
-        let directorDirectoryHandle = null;
+        let saveDirectoryHandle = null; // Renamed from directorDirectoryHandle for general use
         let speechRestartTimeout = null;
         let lastSpeechEndTime = 0;
 
@@ -761,11 +772,36 @@
         let destinationStream = null;
         let uiTimeout = null;
         let isSwitchingMode = false; // Guard for intentional mic handoff
-        
+
         // State for smooth tracking
         let smoothCentroidX = 0.5;
         let smoothCentroidY = 0.5;
         let smoothFaceWidth = 0.5;
+
+        // --- PERSISTENCE HELPERS ---
+        async function saveHandleToDB(handle) {
+            const db = await openDB();
+            const tx = db.transaction('settings', 'readwrite');
+            await tx.objectStore('settings').put(handle, 'saveDirectory');
+        }
+
+        async function getHandleFromDB() {
+            const db = await openDB();
+            return new Promise((resolve) => {
+                const request = db.transaction('settings').objectStore('settings').get('saveDirectory');
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => resolve(null);
+            });
+        }
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('CameramanDB', 1);
+                request.onupgradeneeded = () => request.result.createObjectStore('settings');
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
 
         async function init() {
             try {
@@ -773,6 +809,21 @@
                 populateSelectOptions();
                 setupSettingsUI(); // Ensure listeners are attached
                 setupHandbook();
+
+                // [NEW] Restore Storage Location
+                try {
+                    const savedHandle = await getHandleFromDB();
+                    if (savedHandle) {
+                        // Check if we still have permission (browsers often require re-verify after reload)
+                        if (await savedHandle.queryPermission({ mode: 'readwrite' }) === 'granted') {
+                            saveDirectoryHandle = savedHandle;
+                            document.getElementById('folder-name-display').textContent = savedHandle.name;
+                        } else {
+                            document.getElementById('folder-name-display').textContent = "Tap to reconnect";
+                            document.getElementById('folder-name-display').style.color = "#ffd700";
+                        }
+                    }
+                } catch (e) { console.warn("Failed to restore folder", e); }
 
                 // 2. Init Workers
                 recorderWorker = new Worker('recorder.worker.js');
@@ -814,7 +865,7 @@
         function handleWorkerMessage(event) {
             if (event.data.type === 'closed') {
                 updateDynamicIsland('Success', 'Saved', 'green');
-                setTimeout(() => updateDynamicIsland('Ready'), 3000);
+                setTimeout(() => updateDynamicIsland('Ready'), 1500);
             } else if (event.data.type === 'error') {
                 updateDynamicIsland('Error', 'Save Failed', 'red');
             }
@@ -877,9 +928,41 @@
                 await new Promise(r => video.onloadedmetadata = r);
 
                 // Setup destination stream for recorder
-                // [FIX] Capture stream from the placeholder canvas works even if offscreen!
                 const canvasStream = canvasOutput.captureStream(30);
                 destinationStream = new MediaStream(canvasStream.getVideoTracks()); // Audio added on record start
+
+                // [NEW] Check & Setup Capabilities (Focus/Zoom)
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                const settings = track.getSettings();
+                const sliderContainer = document.getElementById('focus-slider-container');
+                const focusInput = document.getElementById('focus-distance');
+
+                if (capabilities.focusMode && capabilities.focusMode.includes('manual') && capabilities.focusDistance) {
+                    sliderContainer.classList.add('visible'); // Show slider
+                    sliderContainer.style.pointerEvents = 'auto'; // Ensure clickable
+
+                    // Set bounds (usually 0.0 to 1.0 for mobile web)
+                    focusInput.min = capabilities.focusDistance.min || 0;
+                    focusInput.max = capabilities.focusDistance.max || 1;
+                    focusInput.step = capabilities.focusDistance.step || 0.01;
+                    focusInput.value = settings.focusDistance || 0;
+
+                    focusInput.oninput = async (e) => {
+                        try {
+                            await track.applyConstraints({
+                                advanced: [{
+                                    focusMode: 'manual',
+                                    focusDistance: parseFloat(e.target.value)
+                                }]
+                            });
+                        } catch (err) {
+                            console.warn("Focus failed", err);
+                        }
+                    };
+                } else {
+                    sliderContainer.classList.remove('visible'); // Hide if not supported
+                }
 
                 updateDynamicIsland('Ready');
             } catch (err) {
@@ -964,11 +1047,28 @@
                 targetCrop = { x: tx, y: ty, width: w, height: h };
             }
 
-            // Interpolate Crop
-            currentCrop.x += (targetCrop.x - currentCrop.x) * 0.05;
-            currentCrop.y += (targetCrop.y - currentCrop.y) * 0.05;
-            currentCrop.width += (targetCrop.width - currentCrop.width) * 0.05;
-            currentCrop.height += (targetCrop.height - currentCrop.height) * 0.05;
+            // [IMPROVED] Adaptive Tracking Speed
+            // Calculate distance to target (How far off are we?)
+            const dx = targetCrop.x - currentCrop.x;
+            const dy = targetCrop.y - currentCrop.y;
+            const dw = targetCrop.width - currentCrop.width;
+            
+            // Distance metric (Euclidean-ish)
+            const distance = Math.sqrt(dx*dx + dy*dy + dw*dw);
+
+            // Adaptive Speed Logic:
+            // - If distance is small (< 0.01), stick to 0.02 (Very heavy/smooth)
+            // - If distance is large (> 0.2), ramp up to 0.15 (Fast/Sport mode)
+            // Function: Base + (Distance^Power) * Multiplier
+            let speed = 0.03 + Math.pow(distance, 1.5) * 2.0;
+            
+            // Clamp speed to sane limits
+            speed = Math.max(0.01, Math.min(0.2, speed));
+
+            currentCrop.x += (targetCrop.x - currentCrop.x) * speed;
+            currentCrop.y += (targetCrop.y - currentCrop.y) * speed;
+            currentCrop.width += (targetCrop.width - currentCrop.width) * speed;
+            currentCrop.height += (targetCrop.height - currentCrop.height) * speed;
 
 
             // --- 2. Send to Worker for Rendering ---
@@ -1162,7 +1262,6 @@
                         // 1. Request Microphone Permission Explicitly
                         try {
                             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                            // [FIX] Immediately release the stream to prevent locking the mic
                             stream.getTracks().forEach(track => track.stop());
                         } catch (micErr) {
                             console.error("Microphone denied", micErr);
@@ -1170,24 +1269,67 @@
                             throw micErr;
                         }
 
-                        // 2. Request Directory Access for Auto-Save
-                        directorDirectoryHandle = await window.showDirectoryPicker({
-                            id: 'cameraman-takes',
-                            mode: 'readwrite'
-                        });
+                        // 2. [CHANGED] Use global save location if set, otherwise prompt IF not set
+                        if (!saveDirectoryHandle) {
+                             try {
+                                saveDirectoryHandle = await window.showDirectoryPicker({
+                                    id: 'cameraman-takes',
+                                    mode: 'readwrite'
+                                });
+                                document.getElementById('folder-name-display').textContent = saveDirectoryHandle.name;
+                             } catch (err) {
+                                // User cancelled director setup
+                                console.log("Director folder cancelled");
+                                e.target.checked = false;
+                                directorModeEnabled = false;
+                                return;
+                             }
+                        }
+                        
                         startListening();
                         updateDynamicIsland("Director Mode Ready");
                     } catch (err) {
-                        console.error("Directory access denied:", err);
+                        console.error("Director setup error:", err);
                         e.target.checked = false;
                         directorModeEnabled = false;
-                        updateDynamicIsland("Error", "Storage Access Required", "red");
+                        updateDynamicIsland("Error", "Setup Failed", "red");
                     }
                 } else {
                     stopListening();
-                    directorDirectoryHandle = null;
                 }
             });
+
+            // Storage Picker Logic
+            const chooseFolderBtn = document.getElementById('choose-folder-btn');
+            const folderDisplay = document.getElementById('folder-name-display');
+
+            chooseFolderBtn.onclick = async () => {
+                try {
+                    const handle = await window.showDirectoryPicker({
+                        id: 'cameraman-takes',
+                        mode: 'readwrite'
+                    });
+                    saveDirectoryHandle = handle;
+                    folderDisplay.textContent = handle.name;
+                    folderDisplay.style.color = "#888";
+                    await saveHandleToDB(handle); // Persist
+                    updateDynamicIsland("Storage Set", handle.name);
+                } catch (e) {
+                    // User cancelled
+                }
+            };
+
+            // Allow re-verifying permission by tapping the name
+            folderDisplay.onclick = async () => {
+                if (saveDirectoryHandle && await saveDirectoryHandle.queryPermission({ mode: 'readwrite' }) !== 'granted') {
+                    try {
+                        await saveDirectoryHandle.requestPermission({ mode: 'readwrite' });
+                        folderDisplay.textContent = saveDirectoryHandle.name;
+                        folderDisplay.style.color = "#888";
+                        updateDynamicIsland("Storage Reconnected");
+                    } catch (e) { }
+                }
+            };
         }
 
         // --- DIRECTOR MODE ---
@@ -1457,13 +1599,27 @@
                 const mimeType = getSupportedMimeType();
                 const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
 
-                // Auto-Save logic for Director Mode
-                if (directorModeEnabled && directorDirectoryHandle) {
+                // Auto-Save logic (Director Mode OR Default Folder)
+                if (saveDirectoryHandle) {
                     const filename = `take-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`;
                     try {
-                        fileHandle = await directorDirectoryHandle.getFileHandle(filename, { create: true });
+                        fileHandle = await saveDirectoryHandle.getFileHandle(filename, { create: true });
                     } catch (err) {
-                        throw new Error("Storage Access Error: " + err.message);
+                        // Handle lost permission or error
+                        console.error("Auto-save failed, falling back to prompt", err);
+                        saveDirectoryHandle = null; // Reset
+                         try {
+                            fileHandle = await window.showSaveFilePicker({
+                                suggestedName: `video-${Date.now()}.${extension}`,
+                                types: [{
+                                    description: 'Video File',
+                                    accept: { [mimeType.split(';')[0]]: ['.' + extension] }
+                                }]
+                            });
+                        } catch (pickerErr) {
+                            if (pickerErr.name === 'AbortError') return;
+                            throw pickerErr;
+                        }
                     }
                 } else {
                     // Manual Mode
@@ -1481,7 +1637,12 @@
                     }
                 }
 
-                const writable = await fileHandle.createWritable();
+                // [OPTIMIZATION] Transfer Handle to Worker
+                // Let the worker open the file to avoid "DataCloneError" and blocking main thread
+                recorderWorker.postMessage({
+                    type: 'init',
+                    payload: { fileHandle: fileHandle }
+                });
 
                 // 2. [FIX] Request Audio Stream with RETRY
                 let audioStream;
@@ -1506,36 +1667,33 @@
 
                 // Store audio track to stop it later
                 mediaRecorder.audioTrack = audioTrack;
-                mediaRecorder.ondataavailable = async (e) => {
+                mediaRecorder.ondataavailable = (e) => {
                     if (e.data.size > 0) {
-                        try {
-                            await writable.write(e.data);
-                            diIndicator.style.opacity = (diIndicator.style.opacity === '1' ? '0.5' : '1');
-                        } catch (err) {
-                            console.error("Write error:", err);
-                            updateDynamicIsland("Error", "Write Failed", "red");
-                        }
+                        // [OPTIMIZATION] Send chunk to worker
+                        recorderWorker.postMessage({
+                            type: 'write',
+                            payload: { data: e.data }
+                        });
+                        diIndicator.style.opacity = (diIndicator.style.opacity === '1' ? '0.5' : '1');
                     }
                 };
                 mediaRecorder.onstop = async () => {
-                    try {
-                        await writable.close();
-                        console.log("File closed successfully.");
+                    // [OPTIMIZATION] Tell worker to finish
+                    recorderWorker.postMessage({ type: 'close' });
 
-                        // [FIX] Stop Audio Track to release Mic
-                        if (mediaRecorder.audioTrack) {
-                            mediaRecorder.audioTrack.stop();
-                        }
+                    // Stop Audio Track
+                    if (mediaRecorder.audioTrack) {
+                        mediaRecorder.audioTrack.stop();
+                    }
 
-                        // [FIX] Restore Director Mode if needed
-                        restoreMicAfterRecording();
-
-                    } catch (err) { console.error("File Close Error", err); }
+                    // [FIX] Restore Director Mode if needed
+                    restoreMicAfterRecording();
 
                     isRecording = false;
                     recordBtnInner.classList.remove('recording');
                     diTimerContainer.classList.add('hidden');
-                    updateDynamicIsland("Saved", "", "green");
+                    updateDynamicIsland("Saving..."); 
+                    clearTimeout(recordingInterval);
                 };
 
                 mediaRecorder.start(1000);
@@ -1622,9 +1780,18 @@
                 if (!blob) return;
                 try {
                     let handle;
-                    if (directorModeEnabled && directorDirectoryHandle) {
+                    if (saveDirectoryHandle) {
                         const filename = `photo-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
-                        handle = await directorDirectoryHandle.getFileHandle(filename, { create: true });
+                        try {
+                             handle = await saveDirectoryHandle.getFileHandle(filename, { create: true });
+                        } catch (e) {
+                            // Fallback
+                            saveDirectoryHandle = null;
+                            handle = await window.showSaveFilePicker({
+                                suggestedName: `photo-${Date.now()}.png`,
+                                types: [{ description: 'PNG Image', accept: { 'image/png': ['.png'] } }]
+                            });
+                        }
                     } else {
                         handle = await window.showSaveFilePicker({
                             suggestedName: `photo-${Date.now()}.png`,
@@ -1637,8 +1804,10 @@
                     updateDynamicIsland("Photo Saved");
                     setTimeout(() => updateDynamicIsland("Ready"), 1500);
                 } catch (err) {
-                    console.error("Photo Save Failed", err);
-                    updateDynamicIsland("Error", "Save Failed", "red");
+                    if (err.name !== 'AbortError') {
+                         console.error("Photo Save Failed", err);
+                         updateDynamicIsland("Error", "Save Failed", "red");
+                    }
                 }
             }, 'image/png');
         };
@@ -1663,10 +1832,10 @@
 
         function getSupportedMimeType() {
             const types = [
+                'video/mp4', // Prioritize MP4 (Better metadata/seek support)
                 'video/webm; codecs=vp9,opus',
                 'video/webm; codecs=vp8,opus',
-                'video/webm',
-                'video/mp4' // Safari support
+                'video/webm'
             ];
             for (const type of types) {
                 if (MediaRecorder.isTypeSupported(type)) {
