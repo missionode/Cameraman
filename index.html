@@ -1043,14 +1043,14 @@
                 if (movieModeEnabled) {
                     // MOVIE MODE: Wide & Cinematic
                     // Target Face Width in Frame = ~12% (Full Shot)
-                    desiredCropWidth = Math.min(1.0, smoothFaceWidth * 6.0);
+                    desiredCropWidth = Math.min(1.0, smoothFaceWidth * 7.0);
                     desiredCropWidth = Math.max(0.6, desiredCropWidth); // Never zoom in too close
 
                 } else {
                     // STANDARD: Intimacy / Vlog
-                    // Target Face Width in Frame = ~30% (Medium Close Up)
-                    desiredCropWidth = Math.min(1.0, smoothFaceWidth * 2.5);
-                    desiredCropWidth = Math.max(0.4, desiredCropWidth);
+                    // Target Face Width in Frame = ~25% (Medium Shot) - Increased padding for hair/forehead
+                    desiredCropWidth = Math.min(1.0, smoothFaceWidth * 4.0);
+                    desiredCropWidth = Math.max(0.5, desiredCropWidth);
                 }
 
                 // Apply Aspect Ratio
@@ -1070,17 +1070,17 @@
                 if (w > 1.0) { w = 1.0; h = w / ratioMultiplier; }
                 if (h > 1.0) { h = 1.0; w = h * ratioMultiplier; }
 
-                // 3. Position the Crop (Rule of Thirds)
+                // 3. Position the Crop
                 let x = smoothCentroidX - w / 2;
                 let y = smoothCentroidY - h / 2;
 
                 if (movieModeEnabled) {
                     // Cinematic Headroom: Eyes at top 1/3 line
-                    // Center of face (smoothCentroidY) should be at 35% from top of crop
-                    y = smoothCentroidY - h * 0.35;
+                    // Adjusted to be slightly less aggressive to save hair
+                    y = smoothCentroidY - h * 0.4;
                 } else {
-                    // Standard: Slightly above center (Optical Center)
-                    y = smoothCentroidY - h * 0.45;
+                    // Standard: Dead Center to ensure full face + hair is safe
+                    y = smoothCentroidY - h * 0.5;
                 }
 
                 // Clamp to video bounds
