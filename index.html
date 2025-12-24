@@ -749,13 +749,13 @@
         let speechRestartTimeout = null;
         let lastSpeechEndTime = 0;
 
-        let canvasCtx = canvasOutput.getContext('2d', { willReadFrequently: false, alpha: false });
         let currentCrop = { x: 0, y: 0, width: 1, height: 1 };
         let targetCrop = { x: 0, y: 0, width: 1, height: 1 };
 
         let mediaRecorder = null;
         let fileHandle = null;
         let recorderWorker = null;
+        let videoProcessorWorker = null; // [NEW]
         let recordingStartTime = 0;
         let recordingInterval = null;
         let destinationStream = null;
@@ -774,9 +774,14 @@
                 setupSettingsUI(); // Ensure listeners are attached
                 setupHandbook();
 
-                // 2. Init Worker
+                // 2. Init Workers
                 recorderWorker = new Worker('recorder.worker.js');
                 recorderWorker.onmessage = handleWorkerMessage;
+
+                // [NEW] Init Video Processor
+                videoProcessorWorker = new Worker('video-processor.worker.js');
+                const offscreen = canvasOutput.transferControlToOffscreen();
+                videoProcessorWorker.postMessage({ type: 'init', payload: { canvas: offscreen } }, [offscreen]);
 
                 // 3. Init Camera & Canvas
 
@@ -872,7 +877,7 @@
                 await new Promise(r => video.onloadedmetadata = r);
 
                 // Setup destination stream for recorder
-                // Setup destination stream for recorder (Video Only initially)
+                // [FIX] Capture stream from the placeholder canvas works even if offscreen!
                 const canvasStream = canvasOutput.captureStream(30);
                 destinationStream = new MediaStream(canvasStream.getVideoTracks()); // Audio added on record start
 
@@ -906,120 +911,86 @@
             }
         }
 
-        // --- CANVAS LOOP ---
-        function canvasLoop() {
+        // --- CANVAS LOOP (MAIN THREAD CONTROLLER) ---
+        async function canvasLoop() {
             if (!video || video.paused || video.ended) {
                 requestAnimationFrame(canvasLoop);
                 return;
             }
 
-            // Resize Canvas to match target Aspect Ratio
-            // We lock the max dimension to the video source
+            // --- 1. Calculate Logic (Layout, Crop, AI) ---
+            
+            // Resize Calculations
             const srcRatio = video.videoWidth / video.videoHeight;
             let targetW, targetH;
 
-            // Decide output dimensions based on constraints
-            // We want largest possible canvas that fits in video bounds? 
-            // OR just largest possible resolution matching AR.
-            // Let's use video width as a baseline for quality.
-
             if (currentAspectRatio >= srcRatio) {
-                // Target is wider than source (or same).
-                // Usually we can't capture wider than source unless we upscale/blackbar.
-                // But for "Portrait" on phone, source might be 9:16.
-                // If we want 16:9 from 9:16 source, we crop a LOT of height.
-
-                // Let's optimize for maximum pixels used from source.
-                // If Target AR > Source AR (e.g. 16:9 from 4:3), width is limiting factor? No, we crop top/bottom.
-                // So width = source width. Height = width / targetAR.
-
                 targetW = video.videoWidth;
                 targetH = targetW / currentAspectRatio;
             } else {
-                // Target AR < Source AR (e.g. 9:16 from 16:9).
-                // Height = source height. Width = height * targetAR.
                 targetH = video.videoHeight;
                 targetW = targetH * currentAspectRatio;
             }
 
-            // [OPTIMIZATION] Cap Resolution to reduce heat
-            // High-res sensors (4K) cause massive overheat on resize/grading/AI
+            // Cap Resolution
             const MAX_DIMENSION = 1280;
             if (targetW > MAX_DIMENSION || targetH > MAX_DIMENSION) {
                 const scale = Math.min(MAX_DIMENSION / targetW, MAX_DIMENSION / targetH);
                 targetW *= scale;
                 targetH *= scale;
             }
+            
+            // Ensure integer
+            targetW = Math.floor(targetW);
+            targetH = Math.floor(targetH);
 
-            // Update canvas size if different
-            if (canvasOutput.width !== Math.floor(targetW) || canvasOutput.height !== Math.floor(targetH)) {
-                canvasOutput.width = Math.floor(targetW);
-                canvasOutput.height = Math.floor(targetH);
-            }
-
-            // 1. Face Tracking / Crop Logic
+            // 2. Face Tracking / Crop Logic (Same as before)
             if (centerStageEnabled && faceDetector) {
                 processCenterStage();
             } else {
-                // Default: Center Crop matching Aspect Ratio
                 const srcRatio = video.videoWidth / video.videoHeight;
                 let w = 1, h = 1;
-
-                // We want crop AR (w*sysW / h*sysH) == currentAspectRatio
-                // w/h = currentAspectRatio / srcRatio
-
                 const ratioMultiplier = currentAspectRatio / srcRatio;
 
                 if (ratioMultiplier > 1) {
-                    // Target is wider than source.
-                    // To get wider AR from square, we need smaller height. (w=1, h < 1)
                     h = 1 / ratioMultiplier;
                 } else {
-                    // Target is taller (narrower).
-                    // We need smaller width. (h=1, w < 1)
                     w = 1 * ratioMultiplier;
                 }
 
-                // Target: Smoothly transition to center
                 const tx = (1 - w) / 2;
                 const ty = (1 - h) / 2;
 
-                targetCrop = {
-                    x: tx,
-                    y: ty,
-                    width: w,
-                    height: h
-                };
+                targetCrop = { x: tx, y: ty, width: w, height: h };
             }
 
-            // [IMPROVED] Spring-like Smoothing
-            const speed = 0.04;
-            currentCrop.x += (targetCrop.x - currentCrop.x) * speed;
-            currentCrop.y += (targetCrop.y - currentCrop.y) * speed;
-            currentCrop.width += (targetCrop.width - currentCrop.width) * speed;
-            currentCrop.height += (targetCrop.height - currentCrop.height) * speed;
+            // Interpolate Crop
+            currentCrop.x += (targetCrop.x - currentCrop.x) * 0.05;
+            currentCrop.y += (targetCrop.y - currentCrop.y) * 0.05;
+            currentCrop.width += (targetCrop.width - currentCrop.width) * 0.05;
+            currentCrop.height += (targetCrop.height - currentCrop.height) * 0.05;
 
 
             // --- 2. Send to Worker for Rendering ---
+            try {
+                // [OPTIMIZATION] Create bitmap efficiently
+                const bitmap = await createImageBitmap(video);
+                
+                // Post to worker
+                videoProcessorWorker.postMessage({
+                    type: 'render',
+                    payload: {
+                        bitmap: bitmap,
+                        crop: currentCrop,
+                        grading: colorGradingSelect.value,
+                        width: targetW,
+                        height: targetH,
+                        isMirror: currentFacingMode === 'user'
+                    }
+                }, [bitmap]); // Transfer the bitmap!
 
-            // 3. Draw
-            let sx = currentCrop.x * video.videoWidth;
-            let sy = currentCrop.y * video.videoHeight;
-            let sw = currentCrop.width * video.videoWidth;
-            let sh = currentCrop.height * video.videoHeight;
-
-            canvasCtx.globalCompositeOperation = 'source-over';
-            canvasCtx.save();
-            if (currentFacingMode === 'user') {
-                canvasCtx.translate(canvasOutput.width, 0);
-                canvasCtx.scale(-1, 1);
-            }
-            canvasCtx.drawImage(video, sx, sy, sw, sh, 0, 0, canvasOutput.width, canvasOutput.height);
-            canvasCtx.restore();
-
-            // 4. Color Grade
-            if (colorGradingSelect.value !== 'none') {
-                applyCanvasGrading(canvasCtx, canvasOutput.width, canvasOutput.height, colorGradingSelect.value);
+            } catch (e) {
+                // Frame dropped or error (e.g., video not ready)
             }
 
             requestAnimationFrame(canvasLoop);
@@ -1719,36 +1690,6 @@
             currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
             startCamera();
         };
-
-        // Reuse grading definitions
-        const gradingDefinitions = {
-            'noir': [{ mode: 'saturation', color: '#000000' }, { mode: 'overlay', color: 'rgba(0,0,0,0.4)' }, { mode: 'multiply', color: 'rgba(0,0,0,0.2)' }],
-            'vintage': [{ mode: 'color', color: 'rgba(112, 66, 20, 0.4)' }, { mode: 'soft-light', color: 'rgba(255, 240, 200, 0.3)' }, { mode: 'multiply', color: 'rgba(255, 255, 255, 0.1)' }],
-            'bleach-bypass': [{ mode: 'saturation', color: '#555555' }, { mode: 'overlay', color: 'rgba(255,255,255,0.3)' }, { mode: 'multiply', color: 'rgba(0,0,0,0.3)' }],
-            'teal-orange': [{ mode: 'overlay', gradient: { stops: [[0, 'rgba(0, 128, 128, 0.6)'], [1, 'rgba(255, 165, 0, 0.6)']], type: 'linear' } }],
-            'matrix': [{ mode: 'saturation', color: '#000000' }, { mode: 'overlay', color: '#00ff00' }, { mode: 'multiply', color: 'rgba(0, 50, 0, 0.4)' }],
-            'kgf': [{ mode: 'color', color: 'rgba(180, 140, 60, 0.5)' }, { mode: 'multiply', color: 'rgba(20, 10, 0, 0.4)' }, { mode: 'overlay', color: 'rgba(200, 150, 50, 0.2)' }],
-            'salaar': [{ mode: 'saturation', color: '#333333' }, { mode: 'multiply', color: 'rgba(20, 30, 40, 0.5)' }, { mode: 'hard-light', color: 'rgba(0, 0, 0, 0.3)' }],
-            'empuraan': [{ mode: 'multiply', color: 'rgba(50, 20, 10, 0.5)' }, { mode: 'overlay', color: 'rgba(255, 100, 50, 0.4)' }, { mode: 'saturation', color: 'rgba(255, 100, 50, 0.5)' }],
-            'meiyazhagan': [{ mode: 'soft-light', color: 'rgba(255, 240, 220, 0.3)' }, { mode: 'screen', color: 'rgba(255, 200, 150, 0.1)' }]
-        };
-
-        function applyCanvasGrading(ctx, width, height, gradeName) {
-            const layers = gradingDefinitions[gradeName];
-            if (!layers) return;
-            layers.forEach(layer => {
-                ctx.globalCompositeOperation = layer.mode;
-                if (layer.gradient) {
-                    const grad = ctx.createLinearGradient(0, 0, width, height);
-                    layer.gradient.stops.forEach(stop => grad.addColorStop(stop[0], stop[1]));
-                    ctx.fillStyle = grad;
-                } else {
-                    ctx.fillStyle = layer.color;
-                }
-                ctx.fillRect(0, 0, width, height);
-            });
-            ctx.globalCompositeOperation = 'source-over';
-        }
 
         function setupHandbook() {
             const btn = document.getElementById('handbook-btn');
