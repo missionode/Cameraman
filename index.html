@@ -10,15 +10,21 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <!-- [NEW] Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
         :root {
             --primary-color: #ffffff;
             --accent-color: #ffd700;
-            --glass-bg: rgba(30, 30, 30, 0.45);
-            --glass-border: rgba(255, 255, 255, 0.15);
-            --blur-amount: 40px;
+            /* [NEW] Brighter, Frostier Glass */
+            --glass-bg: rgba(255, 255, 255, 0.12);
+            --glass-border: rgba(255, 255, 255, 0.25);
+            --blur-amount: 50px;
             --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-            --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
         }
 
         * {
@@ -34,19 +40,15 @@
             color: #fff;
             height: 100vh;
             height: 100dvh;
-            /* Mobile viewport fix */
             width: 100vw;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             user-select: none;
-            margin: 0;
-            padding: 0;
         }
 
         .container {
             position: absolute;
-            /* Changed from relative to absolute to force full filling */
             top: 0;
             left: 0;
             width: 100%;
@@ -56,8 +58,7 @@
         }
 
         /* --- Viewfinder --- */
-        #video,
-        #canvas-output {
+        #video, #canvas-output {
             position: absolute;
             top: 0;
             left: 0;
@@ -65,22 +66,13 @@
             height: 100%;
             object-fit: contain;
             transform: translateZ(0);
-            /* Force hardware accel */
             transition: opacity 0.3s ease;
         }
 
-        #video {
-            z-index: 1;
-            opacity: 0;
-            /* Hide raw video */
-        }
+        #video { z-index: 1; opacity: 0; }
+        #canvas-output { z-index: 2; opacity: 1; }
 
-        #canvas-output {
-            z-index: 2;
-            opacity: 1;
-        }
-
-        /* --- Dynamic Island (Top Bar) --- */
+        /* --- Dynamic Island --- */
         .dynamic-island-container {
             position: absolute;
             top: 12px;
@@ -94,18 +86,19 @@
 
         .dynamic-island {
             background: #000;
-            border-radius: 20px;
-            height: 36px;
+            border-radius: 24px; /* Rounder */
+            height: 38px;
             min-width: 120px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 12px;
+            padding: 0 14px;
             transition: all 0.6s var(--ease-out-expo);
             pointer-events: auto;
             color: white;
             box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
             overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1); /* Subtle border */
         }
 
         .dynamic-island.recording {
@@ -118,7 +111,8 @@
             align-items: center;
             gap: 8px;
             font-size: 14px;
-            font-weight: 500;
+            font-weight: 600; /* Bolder */
+            letter-spacing: -0.01em;
             white-space: nowrap;
         }
 
@@ -138,16 +132,16 @@
 
         .di-timer {
             font-variant-numeric: tabular-nums;
-            letter-spacing: 0.3px;
             color: #ff3b30;
+            font-weight: 600;
         }
 
-        /* --- Floating Controls (Side Islands) --- */
+        /* --- Top Controls --- */
         .top-controls {
             position: absolute;
-            top: 15px;
+            top: 20px; /* More space */
             width: 100%;
-            padding: 0 16px;
+            padding: 0 24px; /* More gutter */
             display: flex;
             justify-content: space-between;
             z-index: 90;
@@ -159,20 +153,20 @@
             backdrop-filter: blur(var(--blur-amount));
             -webkit-backdrop-filter: blur(var(--blur-amount));
             border: 1px solid var(--glass-border);
-            height: 44px;
-            width: 44px;
+            height: 48px; /* Larger touch target */
+            width: 48px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             pointer-events: auto;
-            transition: transform 0.2s ease, background 0.3s;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+            transition: transform 0.2s ease, background 0.3s, border-color 0.3s;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
         }
 
         .glass-pill:active {
-            transform: scale(0.92);
-            background: rgba(50, 50, 50, 0.6);
+            transform: scale(0.94);
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .icon-btn {
@@ -189,36 +183,37 @@
         }
 
         .icon-btn svg {
-            width: 22px;
-            height: 22px;
-            fill: white;
-            stroke: white;
-            stroke-width: 0.5px;
+            width: 24px;
+            height: 24px;
+            stroke: white; /* Line icons */
+            fill: none;
+            stroke-width: 1.8px;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
 
         /* --- Bottom Controls --- */
         .controls {
             position: absolute;
-            bottom: 40px;
+            bottom: 48px;
             left: 0;
             width: 100%;
             display: flex;
             justify-content: space-around;
             align-items: center;
             z-index: 100;
-            padding: 0 20px;
+            padding: 0 32px;
         }
 
         .control-btn-secondary {
-            width: 56px;
-            height: 56px;
+            width: 64px; /* Larger */
+            height: 64px;
             border-radius: 50%;
-            background: rgba(30, 30, 30, 0.5);
+            background: var(--glass-bg);
             backdrop-filter: blur(var(--blur-amount));
             -webkit-backdrop-filter: blur(var(--blur-amount));
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border);
             color: white;
-            border: none;
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -228,31 +223,35 @@
 
         .control-btn-secondary:active {
             transform: scale(0.92);
-            background: rgba(60, 60, 60, 0.6);
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .control-btn-secondary svg {
-            width: 26px;
-            height: 26px;
-            fill: white;
+            width: 28px;
+            height: 28px;
+            fill: none;
+            stroke: white;
+            stroke-width: 1.8px;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
 
         /* --- Shutter Button --- */
         #record-container {
             position: relative;
-            width: 88px;
-            height: 88px;
+            width: 96px;
+            height: 96px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         #record {
-            width: 76px;
-            height: 76px;
+            width: 84px;
+            height: 84px;
             border-radius: 50%;
             background: transparent;
-            border: 5px solid white;
+            border: 4px solid white; /* Thinner border */
             position: relative;
             cursor: pointer;
             transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
@@ -263,49 +262,47 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 62px;
-            height: 62px;
+            width: 70px;
+            height: 70px;
             border-radius: 50%;
             background: #ff3b30;
             transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
         #record.recording {
-            border-width: 6px;
-            border-color: rgba(255, 255, 255, 0.4);
+            border-color: rgba(255, 255, 255, 0.6);
             transform: scale(1.05);
         }
 
         #record.recording .inner-circle {
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
         }
 
         /* --- Slider --- */
         .slider-container {
             position: absolute;
-            right: 16px;
+            right: 20px;
             top: 50%;
             transform: translateY(-50%);
-            height: 220px;
-            width: 44px;
+            height: 240px;
+            width: 48px;
             z-index: 95;
             display: flex;
             justify-content: center;
-            background: rgba(20, 20, 20, 0.4);
-            backdrop-filter: blur(20px);
-            border-radius: 22px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--blur-amount));
+            -webkit-backdrop-filter: blur(var(--blur-amount));
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s ease;
-            padding: 10px 0;
+            padding: 12px 0;
         }
 
-        .slider-container.visible {
-            opacity: 1;
-            pointer-events: auto;
-        }
+        .slider-container.visible { opacity: 1; pointer-events: auto; }
 
         input[type=range][orient=vertical] {
             writing-mode: bt-lr;
@@ -313,10 +310,10 @@
             appearance: slider-vertical;
             width: 100%;
             height: 100%;
-            opacity: 0.8;
+            opacity: 0.9;
         }
 
-        /* --- Panels --- */
+        /* --- Full Screen Panels (Settings/Handbook) --- */
         .panel-overlay {
             position: fixed;
             top: 0;
@@ -324,74 +321,98 @@
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.01);
-            /* Transparent logic mostly handled by content */
             z-index: 2000;
             display: none;
-            align-items: center;
+            align-items: flex-end; /* Slide up from bottom */
             justify-content: center;
             opacity: 0;
-            transition: opacity 0.25s ease;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
         }
 
         .panel-overlay.active {
             opacity: 1;
             display: flex;
+            pointer-events: auto;
         }
 
         .panel-content {
-            background: rgba(30, 30, 30, 0.75);
-            backdrop-filter: blur(50px) saturate(180%);
-            -webkit-backdrop-filter: blur(50px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            padding: 24px;
-            border-radius: 32px;
-            width: 85%;
-            max-width: 360px;
-            max-height: 70vh;
-            overflow-y: auto;
+            /* [NEW] Full Screen / Sheet Style */
+            width: 100%;
+            height: 100%;
+            max-width: none;
+            max-height: none;
+            border-radius: 0;
+            
+            background: rgba(20, 20, 20, 0.7); /* Darker base */
+            backdrop-filter: blur(60px) saturate(180%);
+            -webkit-backdrop-filter: blur(60px) saturate(180%);
+            
+            padding: 0;
+            display: flex;
+            flex-direction: column;
             color: white;
-            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
-            transform: scale(0.95);
-            transition: transform 0.25s var(--ease-out-expo);
+            transform: translateY(100%); /* Slide Start */
+            transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+        
+        /* Desktop/Tablet adjustment */
+        @media (min-width: 768px) {
+            .panel-content {
+                width: 420px;
+                height: 90%;
+                max-height: 800px;
+                border-radius: 32px;
+                margin-bottom: 24px;
+                background: rgba(30, 30, 30, 0.6);
+                border: 1px solid rgba(255,255,255,0.15);
+                transform: translateY(20px) scale(0.95);
+            }
+            .panel-overlay { align-items: center; }
+            .panel-overlay.active .panel-content { transform: translateY(0) scale(1); }
         }
 
         .panel-overlay.active .panel-content {
-            transform: scale(1);
+            transform: translateY(0);
+        }
+
+        .panel-header {
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255,255,255,0.03);
+        }
+
+        h2 {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.02em;
         }
 
         .close-btn {
-            position: absolute;
-            top: 16px;
-            right: 16px;
+            position: static; /* Reset */
             background: rgba(255, 255, 255, 0.1);
             border: none;
-            color: #ccc;
-            width: 28px;
-            height: 28px;
+            color: white;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            font-size: 18px;
+            font-size: 20px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: background 0.2s;
         }
+        .close-btn:active { background: rgba(255, 255, 255, 0.2); }
 
-        h2 {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            text-align: center;
-            letter-spacing: -0.5px;
-        }
-
-        .settings-group {
-            margin-bottom: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding-bottom: 16px;
-        }
-
-        .settings-group:last-child {
-            border-bottom: none;
+        .panel-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
         }
 
         label {
@@ -399,72 +420,88 @@
             justify-content: space-between;
             align-items: center;
             font-size: 16px;
-            margin-bottom: 8px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: 0; /* Changed from 10px */
+            color: rgba(255,255,255,0.95);
         }
+
+        .settings-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 28px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 20px;
+        }
+        .settings-row:last-child { border-bottom: none; }
+
+        .settings-group {
+            margin-bottom: 28px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 20px;
+        }
+        .settings-group:last-child { border-bottom: none; }
 
         select {
-            width: 100%;
-            background: rgba(255, 255, 255, 0.08);
-            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255,255,255,0.1);
             color: white;
-            padding: 10px 12px;
-            border-radius: 12px;
+            padding: 10px 14px;
+            border-radius: 14px;
             font-size: 15px;
+            font-weight: 500;
             outline: none;
-            appearance: none;
+            width: auto;
+            min-width: 140px;
+            text-align: right;
+            transition: background 0.2s;
         }
+        select:focus { background: rgba(255, 255, 255, 0.15); }
 
         input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
+            width: 24px;
+            height: 24px;
             accent-color: #4cd964;
         }
 
         small {
-            color: #888;
-            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            font-size: 13px;
+            margin-left: 2px;
         }
 
         /* --- Animations --- */
         @keyframes pulse-red {
-            0% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.6;
-            }
-
-            100% {
-                opacity: 1;
-            }
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
         }
 
-        .hidden {
-            display: none !important;
-        }
+        .hidden { display: none !important; }
 
         /* --- Toast Notification --- */
         .toast {
             position: fixed;
-            top: 20px;
+            top: 24px;
             left: 50%;
-            transform: translateX(-50%) translateY(-100px);
-            background: rgba(20, 20, 20, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            padding: 16px 20px;
-            border-radius: 24px;
+            transform: translateX(-50%) translateY(-120px);
+            background: rgba(25, 25, 25, 0.8);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            padding: 20px;
+            border-radius: 32px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 16px;
             align-items: center;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--glass-border);
             z-index: 10000;
             width: 90%;
-            max-width: 320px;
-            transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+            max-width: 360px;
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s;
             opacity: 0;
             pointer-events: none;
         }
@@ -477,27 +514,28 @@
 
         .toast span {
             color: white;
-            font-size: 14px;
-            font-weight: 500;
+            font-size: 15px;
+            font-weight: 600;
             text-align: center;
             line-height: 1.4;
+            letter-spacing: -0.01em;
         }
 
         .toast-buttons {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             width: 100%;
         }
 
         .toast-buttons button {
             flex: 1;
-            padding: 10px;
-            border-radius: 12px;
+            padding: 12px;
+            border-radius: 16px;
             border: none;
-            font-size: 14px;
-            font-weight: 600;
+            font-size: 15px;
+            font-weight: 700;
             cursor: pointer;
-            transition: transform 0.1s;
+            transition: transform 0.1s, background 0.2s;
         }
 
         .toast-buttons button:active {
@@ -505,16 +543,18 @@
         }
 
         #toast-install-btn {
-            background: #4cd964;
-            color: black;
+            background: #ffffff;
+            color: #000000;
         }
+        #toast-install-btn:active { background: #eeeeee; }
 
         #toast-dismiss-btn {
             background: rgba(255, 255, 255, 0.1);
             color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
+        #toast-dismiss-btn:active { background: rgba(255, 255, 255, 0.15); }
     </style>
-
 </head>
 
 <body>
@@ -537,23 +577,29 @@
 
         <!-- Top Controls -->
         <div class="top-controls">
-            <!-- Handbook: Book Icon -->
+            <!-- Handbook: Book Icon (Line Art) -->
             <div class="glass-pill">
                 <button class="icon-btn" id="handbook-btn" title="Handbook">
                     <svg viewBox="0 0 24 24">
-                        <path
-                            d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z" />
-                        <path d="M6 7h12v2H6zm0 4h12v2H6zm0 4h8v2H6z" />
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                     </svg>
                 </button>
             </div>
 
-            <!-- Settings: Gear Icon (Rounder) -->
+            <!-- Settings: Sliders Icon (More 'Pro' than Gear) -->
             <div class="glass-pill">
                 <button class="icon-btn" id="settings-btn" title="Settings">
                     <svg viewBox="0 0 24 24">
-                        <path
-                            d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84a.484.484 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.57 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                        <line x1="4" y1="21" x2="4" y2="14" />
+                        <line x1="4" y1="10" x2="4" y2="3" />
+                        <line x1="12" y1="21" x2="12" y2="12" />
+                        <line x1="12" y1="8" x2="12" y2="3" />
+                        <line x1="20" y1="21" x2="20" y2="16" />
+                        <line x1="20" y1="12" x2="20" y2="3" />
+                        <line x1="1" y1="14" x2="7" y2="14" />
+                        <line x1="9" y1="8" x2="15" y2="8" />
+                        <line x1="17" y1="16" x2="23" y2="16" />
                     </svg>
                 </button>
             </div>
@@ -566,10 +612,13 @@
 
         <!-- Bottom Controls -->
         <div class="controls">
-            <!-- Switch Cam: Loop Icon -->
+            <!-- Switch Cam: Rotate Icon -->
             <button class="control-btn-secondary" id="toggle-camera" title="Switch Camera">
                 <svg viewBox="0 0 24 24">
-                    <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" />
+                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                    <path d="M21 3v5h-5" />
+                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                    <path d="M8 16H3v5" />
                 </svg>
             </button>
 
@@ -579,11 +628,11 @@
                 </div>
             </div>
 
-            <!-- Capture: Photo Icon -->
+            <!-- Capture: Camera Icon -->
             <button class="control-btn-secondary" id="capture" title="Photo">
                 <svg viewBox="0 0 24 24">
-                    <path
-                        d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
                 </svg>
             </button>
         </div>
@@ -600,41 +649,47 @@
     <!-- Layouts for Panels (Re-using structures but better styled) -->
     <div class="panel-overlay" id="handbook-panel">
         <div class="panel-content">
-            <button class="close-btn" id="close-handbook-btn">&times;</button>
-            <h2>Handbook</h2>
-            <div id="handbook-content-container"></div>
+            <div class="panel-header">
+                <h2>Handbook</h2>
+                <button class="close-btn" id="close-handbook-btn">&times;</button>
+            </div>
+            <div class="panel-body" id="handbook-content-container"></div>
         </div>
     </div>
 
     <div class="panel-overlay" id="settings-modal">
         <div class="panel-content">
-            <button class="close-btn" id="close-settings-btn">&times;</button>
-            <h2>Settings</h2>
+            <div class="panel-header">
+                <h2>Settings</h2>
+                <button class="close-btn" id="close-settings-btn">&times;</button>
+            </div>
+            <div class="panel-body">
 
-            <div class="settings-group">
+            <div class="settings-row">
                 <label for="aspect-ratio">Aspect Ratio</label>
                 <select id="aspect-ratio"></select>
             </div>
 
-            <div class="settings-group">
+            <div class="settings-row">
                 <label for="color-grading">Color Grading</label>
                 <select id="color-grading"></select>
             </div>
 
             <div class="settings-group">
-                <label for="center-stage-toggle" style="justify-content: flex-start; gap: 10px;">
+                <label for="center-stage-toggle" style="justify-content: flex-start; gap: 12px;">
                     <input type="checkbox" id="center-stage-toggle">
-                    <span>Center Stage</span>
+                    <span>Center Stage (AI)</span>
                 </label>
-                <div id="movie-mode-container" style="margin-left: 30px; margin-top: 10px; display: none;">
-                    <label for="movie-mode-toggle" style="justify-content: flex-start; gap: 10px; font-size: 14px;">
+                <div id="movie-mode-container" style="margin-left: 36px; margin-top: 12px; display: none;">
+                    <label for="movie-mode-toggle" style="justify-content: flex-start; gap: 12px; font-size: 15px; opacity: 0.9;">
                         <input type="checkbox" id="movie-mode-toggle">
                         <span>Movie Mode</span>
                     </label>
-                    <small>Tracks full figure instead of just face.</small>
+                    <small>Tracks full figure for cinematic shots.</small>
                 </div>
-                <small style="display:block; margin-top:4px;">Auto-zoom to keep you in frame.</small>
+                <small style="display:block; margin-top:6px;">Auto-zoom to keep you in frame.</small>
             </div>
+
 
             <div class="settings-group">
                 <label for="apply-grade-to-video" style="justify-content: flex-start; gap: 10px;">
