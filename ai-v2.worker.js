@@ -46,6 +46,10 @@ self.onmessage = async (event) => {
             });
         } catch (e) {
             console.warn("AI Detection Error", e);
+            self.postMessage({ 
+                type: 'result', 
+                payload: { detections: [] } 
+            });
         } finally {
             if (payload.bitmap) payload.bitmap.close();
             isBusy = false;
