@@ -864,6 +864,7 @@
         let recorderWorker = null;
         let videoProcessorWorker = null;
         let aiWorker = null; // [NEW] AI Worker
+        let isAIWorkerBusy = false;
         let recordingStartTime = 0;
         let recordingInterval = null;
         let destinationStream = null;
@@ -1174,21 +1175,27 @@
         }
 
         async function processCenterStage() {
+            if (isAIWorkerBusy) return;
+
             const now = performance.now();
             if (now - lastDetectionTime < 40) return; // Cap at ~25FPS sending rate
             lastDetectionTime = now;
 
             try {
+                isAIWorkerBusy = true;
                 // Create bitmap for AI Worker
                 const bitmap = await createImageBitmap(video);
                 aiWorker.postMessage({
                     type: 'detect',
                     payload: { bitmap: bitmap }
                 }, [bitmap]);
-            } catch (e) { }
+            } catch (e) {
+                isAIWorkerBusy = false;
+            }
         }
 
         function handleAIResult(event) {
+            isAIWorkerBusy = false;
             const { type, payload } = event.data;
             if (type !== 'result') return;
 
