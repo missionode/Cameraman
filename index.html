@@ -871,6 +871,11 @@
         let uiTimeout = null;
         let isSwitchingMode = false; // Guard for intentional mic handoff
 
+        // Performance / AI Resizing
+        let lastRenderTime = performance.now();
+        let aiCanvas = null;
+        let aiCtx = null;
+
         // State for smooth tracking
         let smoothCentroidX = 0.5;
         let smoothCentroidY = 0.5;
@@ -926,6 +931,16 @@
                 // 2. Init Workers
                 recorderWorker = new Worker('recorder.worker.js');
                 recorderWorker.onmessage = handleWorkerMessage;
+
+                // [NEW] Init AI Offscreen Canvas for Downscaling
+                if (typeof OffscreenCanvas !== 'undefined') {
+                    aiCanvas = new OffscreenCanvas(320, 240); // Initial size, will adjust
+                } else {
+                    aiCanvas = document.createElement('canvas');
+                    aiCanvas.width = 320;
+                    aiCanvas.height = 240;
+                }
+                aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
 
                 // [NEW] Init Video Processor
                 videoProcessorWorker = new Worker('video-processor.worker.js');
@@ -1125,23 +1140,26 @@
                 targetCrop = { x: tx, y: ty, width: w, height: h };
             }
 
-            // [IMPROVED] Adaptive Tracking Speed
+            // [IMPROVED] Adaptive Tracking Speed (Resolution & FPS Independent)
+            const now = performance.now();
+            const dt = Math.min((now - lastRenderTime) / 1000, 0.1); // Cap dt at 0.1s to prevent jumps
+            lastRenderTime = now;
+
             // Calculate distance to target (How far off are we?)
             const dx = targetCrop.x - currentCrop.x;
             const dy = targetCrop.y - currentCrop.y;
             const dw = targetCrop.width - currentCrop.width;
             
-            // Distance metric (Euclidean-ish)
+            // Distance metric
             const distance = Math.sqrt(dx*dx + dy*dy + dw*dw);
 
-            // Adaptive Speed Logic:
-            // - If distance is small (< 0.01), stick to 0.02 (Very heavy/smooth)
-            // - If distance is large (> 0.2), ramp up to 0.15 (Fast/Sport mode)
-            // Function: Base + (Distance^Power) * Multiplier
-            let speed = 0.03 + Math.pow(distance, 1.5) * 2.0;
-            
-            // Clamp speed to sane limits
-            speed = Math.max(0.01, Math.min(0.2, speed));
+            // Adaptive Speed Logic (Base @ 60FPS)
+            let baseSpeed = 0.03 + Math.pow(distance, 1.5) * 2.0;
+            baseSpeed = Math.max(0.01, Math.min(0.2, baseSpeed));
+
+            // Scale for Delta Time (Maintain speed on low-FPS high-res devices)
+            const fpsScale = dt * 60;
+            const speed = Math.min(1.0, baseSpeed * fpsScale);
 
             currentCrop.x += (targetCrop.x - currentCrop.x) * speed;
             currentCrop.y += (targetCrop.y - currentCrop.y) * speed;
@@ -1183,12 +1201,24 @@
 
             try {
                 isAIWorkerBusy = true;
-                // Create bitmap for AI Worker
-                const bitmap = await createImageBitmap(video);
-                aiWorker.postMessage({
-                    type: 'detect',
-                    payload: { bitmap: bitmap }
-                }, [bitmap]);
+                
+                // [OPTIMIZATION] Downscale for AI (Fixes Mobile Latency)
+                // Match aspect roughly or just squash - performance is key.
+                if (aiCtx && video.videoWidth > 0) {
+                    aiCtx.drawImage(video, 0, 0, aiCanvas.width, aiCanvas.height);
+                    const bitmap = await createImageBitmap(aiCanvas);
+                    aiWorker.postMessage({
+                        type: 'detect',
+                        payload: { bitmap: bitmap }
+                    }, [bitmap]);
+                } else {
+                     // Fallback
+                    const bitmap = await createImageBitmap(video);
+                    aiWorker.postMessage({
+                        type: 'detect',
+                        payload: { bitmap: bitmap }
+                    }, [bitmap]);
+                }
             } catch (e) {
                 isAIWorkerBusy = false;
             }
