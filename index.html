@@ -858,6 +858,7 @@
 
         let currentCrop = { x: 0, y: 0, width: 1, height: 1 };
         let targetCrop = { x: 0, y: 0, width: 1, height: 1 };
+        let cropVelocity = { x: 0, y: 0, w: 0, h: 0 }; // Physics Velocity
 
         let mediaRecorder = null;
         let fileHandle = null;
@@ -1140,31 +1141,35 @@
                 targetCrop = { x: tx, y: ty, width: w, height: h };
             }
 
-            // [IMPROVED] Adaptive Tracking Speed (Resolution & FPS Independent)
+            // [IMPROVED] Cinematic Spring Physics (SmoothDamp)
+            // Behaves like Fitts's Law: Fast transit, precise stop.
             const now = performance.now();
-            const dt = Math.min((now - lastRenderTime) / 1000, 0.1); // Cap dt at 0.1s to prevent jumps
+            const dt = Math.min((now - lastRenderTime) / 1000, 0.1);
             lastRenderTime = now;
 
-            // Calculate distance to target (How far off are we?)
-            const dx = targetCrop.x - currentCrop.x;
-            const dy = targetCrop.y - currentCrop.y;
-            const dw = targetCrop.width - currentCrop.width;
-            
-            // Distance metric
-            const distance = Math.sqrt(dx*dx + dy*dy + dw*dw);
+            // Parameters
+            const smoothTime = 0.25; // Time to reach target (approx) - Higher = Slower/Heavier
+            const maxSpeed = 2.0;    // Max velocity in normalized units/sec
 
-            // Adaptive Speed Logic (Base @ 60FPS)
-            let baseSpeed = 0.03 + Math.pow(distance, 1.5) * 2.0;
-            baseSpeed = Math.max(0.01, Math.min(0.2, baseSpeed));
+            // Update X
+            const resX = smoothDamp(currentCrop.x, targetCrop.x, cropVelocity.x, smoothTime, maxSpeed, dt);
+            currentCrop.x = resX[0];
+            cropVelocity.x = resX[1];
 
-            // Scale for Delta Time (Maintain speed on low-FPS high-res devices)
-            const fpsScale = dt * 60;
-            const speed = Math.min(1.0, baseSpeed * fpsScale);
+            // Update Y
+            const resY = smoothDamp(currentCrop.y, targetCrop.y, cropVelocity.y, smoothTime, maxSpeed, dt);
+            currentCrop.y = resY[0];
+            cropVelocity.y = resY[1];
 
-            currentCrop.x += (targetCrop.x - currentCrop.x) * speed;
-            currentCrop.y += (targetCrop.y - currentCrop.y) * speed;
-            currentCrop.width += (targetCrop.width - currentCrop.width) * speed;
-            currentCrop.height += (targetCrop.height - currentCrop.height) * speed;
+            // Update Width
+            const resW = smoothDamp(currentCrop.width, targetCrop.width, cropVelocity.w, smoothTime, maxSpeed, dt);
+            currentCrop.width = resW[0];
+            cropVelocity.w = resW[1];
+
+            // Update Height
+            const resH = smoothDamp(currentCrop.height, targetCrop.height, cropVelocity.h, smoothTime, maxSpeed, dt);
+            currentCrop.height = resH[0];
+            cropVelocity.h = resH[1];
 
 
             // --- 2. Send to Worker for Rendering ---
@@ -1316,6 +1321,33 @@
         }
 
         // --- HELPERS ---
+        // Unity-style SmoothDamp for Cinematic Movement
+        function smoothDamp(current, target, currentVelocity, smoothTime, maxSpeed, deltaTime) {
+            smoothTime = Math.max(0.0001, smoothTime);
+            const omega = 2 / smoothTime;
+            const x = omega * deltaTime;
+            const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+            let change = current - target;
+            const originalTo = target;
+
+            // Clamp maximum speed
+            const maxChange = maxSpeed * smoothTime;
+            change = Math.min(Math.max(change, -maxChange), maxChange);
+            target = current - change;
+
+            const temp = (currentVelocity + omega * change) * deltaTime;
+            let newVelocity = (currentVelocity - omega * temp) * exp;
+            let output = target + (change + temp) * exp;
+
+            // Prevent overshooting
+            if (originalTo - current > 0.0 === output > originalTo) {
+                output = originalTo;
+                newVelocity = (output - originalTo) / deltaTime;
+            }
+
+            return [output, newVelocity];
+        }
+
         function populateSelectOptions() {
             aspectRatioSelect.innerHTML = '';
             colorGradingSelect.innerHTML = '';
