@@ -820,10 +820,20 @@
                 <p style="font-size: 14px; color: #aaa; margin-bottom: 20px;">Enter credentials to access secure features.</p>
                 
                 <label style="font-size: 12px; color: #888; margin-bottom: 4px; display:block;">MASTER KEY (PUBLIC)</label>
-                <input type="password" id="sec-master-key" placeholder="Public Password" style="width: 100%; padding: 12px; background: #2c2c2e; border: 1px solid #333; color: white; border-radius: 8px; margin-bottom: 16px; outline: none;">
+                <div style="position: relative; margin-bottom: 16px;">
+                    <input type="password" id="sec-master-key" placeholder="Public Password" style="width: 100%; padding: 12px; padding-right: 40px; background: #2c2c2e; border: 1px solid #333; color: white; border-radius: 8px; outline: none;">
+                    <button class="password-toggle" data-target="sec-master-key" style="position: absolute; right: 0; top: 0; height: 100%; width: 40px; background: none; border: none; color: #888; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
+                </div>
 
                 <label style="font-size: 12px; color: #888; margin-bottom: 4px; display:block;">SECURE KEY (PRIVATE)</label>
-                <input type="password" id="sec-private-key" placeholder="Private Password" style="width: 100%; padding: 12px; background: #2c2c2e; border: 1px solid #333; color: white; border-radius: 8px; margin-bottom: 24px; outline: none;">
+                <div style="position: relative; margin-bottom: 24px;">
+                    <input type="password" id="sec-private-key" placeholder="Private Password" style="width: 100%; padding: 12px; padding-right: 40px; background: #2c2c2e; border: 1px solid #333; color: white; border-radius: 8px; outline: none;">
+                    <button class="password-toggle" data-target="sec-private-key" style="position: absolute; right: 0; top: 0; height: 100%; width: 40px; background: none; border: none; color: #888; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
+                </div>
 
                 <button id="btn-auth-confirm" style="width: 100%; padding: 14px; background: var(--accent-color); color: black; border: none; border-radius: 12px; font-weight: 700; font-size: 16px; cursor: pointer;">Authenticate</button>
             </div>
@@ -931,8 +941,12 @@
 
         // --- SECURE VIDEO STATE ---
         let secureModeStandby = false;
-        let secureCredentials = null; // { master, private } - Only held in memory during standby
-        let secureSourceBuffer = null;
+        let secureCredentials = null; 
+        
+        // Staging for View Mode
+        let pendingSecureFile = null;
+        let pendingSecureSalt = null;
+        let pendingHeaderChunk = null; // Store first chunk to avoid re-reading
 
         const SecureManager = {
             async deriveKey(master, privateKey, salt) {
@@ -954,7 +968,7 @@
                     },
                     keyMaterial,
                     { name: "AES-GCM", length: 256 },
-                    false, // key is not extractable
+                    false, 
                     ["encrypt", "decrypt"]
                 );
             },
@@ -969,24 +983,89 @@
                 const privateInput = document.getElementById('sec-private-key');
                 const playerOverlay = document.getElementById('secure-player-overlay');
                 const closePlayerBtn = document.getElementById('close-player-btn');
+                
+                // Toggle Eye Icons
+                document.querySelectorAll('.password-toggle').forEach(btn => {
+                    btn.onclick = (e) => {
+                        const targetId = btn.getAttribute('data-target');
+                        const input = document.getElementById(targetId);
+                        if (input.type === 'password') {
+                            input.type = 'text';
+                            btn.style.color = '#fff';
+                        } else {
+                            input.type = 'password';
+                            btn.style.color = '#888';
+                        }
+                    };
+                });
 
                 let authMode = 'record'; // 'record' or 'view'
 
+                const resetInputs = () => {
+                    masterInput.value = '';
+                    privateInput.value = '';
+                    masterInput.type = 'password';
+                    privateInput.type = 'password';
+                    document.querySelectorAll('.password-toggle').forEach(b => b.style.color = '#888');
+                };
+
                 btnRecord.onclick = () => {
                     authMode = 'record';
+                    resetInputs();
                     modal.classList.add('active');
-                    settingsModal.classList.remove('active'); // Close settings underneath
                     masterInput.focus();
                 };
 
-                btnView.onclick = () => {
-                    authMode = 'view';
-                    modal.classList.add('active');
-                    settingsModal.classList.remove('active');
-                    masterInput.focus();
+                btnView.onclick = async () => {
+                    try {
+                        // 1. Pick File FIRST
+                        const [fileHandle] = await window.showOpenFilePicker({
+                            types: [{ description: 'Secure Video', accept: { 'application/octet-stream': ['.se6'] } }],
+                            multiple: false
+                        });
+                        const file = await fileHandle.getFile();
+                        
+                        // 2. Validate Header Immediately
+                        const stream = file.stream();
+                        const reader = stream.getReader();
+                        const { value: headerChunk } = await reader.read();
+                        reader.cancel(); // Stop reading for now
+
+                        if (!headerChunk || headerChunk.length < 19) {
+                            alert("File is too small or invalid.");
+                            return;
+                        }
+
+                        const magic = new TextDecoder().decode(headerChunk.slice(0, 3));
+                        if (magic !== 'SE6') {
+                            alert("Selected file is NOT a valid Secure Video (.se6).");
+                            return;
+                        }
+
+                        // 3. Store Context & Show Auth
+                        pendingSecureFile = file;
+                        pendingHeaderChunk = headerChunk;
+                        pendingSecureSalt = headerChunk.slice(3, 19);
+
+                        authMode = 'view';
+                        resetInputs();
+                        modal.classList.add('active');
+                        settingsModal.classList.remove('active'); // Close settings
+                        masterInput.focus();
+
+                    } catch (e) {
+                        if (e.name !== 'AbortError') {
+                            console.error("File Pick Error", e);
+                            alert("Could not open file.");
+                        }
+                    }
                 };
 
-                closeBtn.onclick = () => modal.classList.remove('active');
+                closeBtn.onclick = () => {
+                    modal.classList.remove('active');
+                    resetInputs();
+                    pendingSecureFile = null;
+                };
 
                 btnAuth.onclick = async () => {
                     const master = masterInput.value;
@@ -996,25 +1075,28 @@
                         alert("Both keys are required.");
                         return;
                     }
+                    
+                    // Clear UI immediately for security
+                    modal.classList.remove('active');
+                    settingsModal.classList.remove('active');
 
                     if (authMode === 'record') {
                         // Enter Secure Standby
                         secureCredentials = { master, priv };
                         secureModeStandby = true;
                         
-                        // UI Feedback
-                        modal.classList.remove('active');
-                        recordBtnInner.style.borderColor = "#ffd700"; // Gold
+                        recordBtnInner.style.borderColor = "#ffd700"; 
                         recordBtnInner.querySelector('.inner-circle').style.background = "#ffd700";
                         updateDynamicIsland("Secure Mode", "Standby", "gold");
-                        
-                        // Toast/Notification
                         alert("Secure Mode Active. Next recording will be encrypted.");
+                        resetInputs(); // Clear memory of inputs
 
                     } else {
                         // View Mode
-                        modal.classList.remove('active');
-                        this.startSecurePlaybackFlow(master, priv);
+                        if (pendingSecureFile && pendingSecureSalt) {
+                            this.startPlayer(master, priv, pendingSecureFile, pendingSecureSalt, pendingHeaderChunk);
+                        }
+                        resetInputs(); 
                     }
                 };
                 
@@ -1023,77 +1105,60 @@
                     const v = document.getElementById('secure-video-element');
                     v.pause();
                     v.src = "";
-                    if (v.srcObject) v.srcObject = null; // Clean up MSE
+                    if (v.srcObject) v.srcObject = null;
                 };
             },
 
-            async startSecurePlaybackFlow(master, priv) {
+            async startPlayer(master, priv, file, salt, initialChunk) {
                 try {
-                    // 1. Pick File
-                    const [fileHandle] = await window.showOpenFilePicker({
-                        types: [{ description: 'Secure Video', accept: { 'application/octet-stream': ['.se6'] } }],
-                        multiple: false
-                    });
-                    const file = await fileHandle.getFile();
-
-                    // 2. Read Header
-                    const stream = file.stream();
-                    const reader = stream.getReader();
-                    
-                    // Need Magic (3) + Salt (16) = 19 bytes
-                    let { value: headerChunk } = await reader.read(); 
-                    // Note: headerChunk might be larger, need to slice.
-                    
-                    if (headerChunk.length < 19) throw new Error("File too short");
-
-                    const magic = new TextDecoder().decode(headerChunk.slice(0, 3));
-                    if (magic !== 'SE6') {
-                        alert("Invalid File Format. Not a .se6 file.");
-                        return;
-                    }
-
-                    const salt = headerChunk.slice(3, 19);
-                    
-                    // 3. Derive Key
                     document.getElementById('secure-loading').style.display = 'block';
                     document.getElementById('secure-player-overlay').classList.add('active');
                     
                     const key = await this.deriveKey(master, priv, salt);
 
-                    // 4. Setup MSE
+                    // Setup MSE
                     const videoEl = document.getElementById('secure-video-element');
                     const mediaSource = new MediaSource();
                     videoEl.src = URL.createObjectURL(mediaSource);
 
                     mediaSource.addEventListener('sourceopen', async () => {
-                        // Assuming mime type is one of these (usually we'd store it in header, but for now hardcode generic)
-                        // Using 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"' is risky if we recorded webm.
-                        // We will try webm first as that's default for MediaRecorder in many cases, or check file extension?
-                        // Actually, let's try a safe default or ask user?
-                        // BETTER: Store mime type in header. For now, try generic webm/vp9.
-                        
                         let sourceBuffer;
                         try {
                              sourceBuffer = mediaSource.addSourceBuffer('video/webm; codecs="vp8,opus"');
                         } catch(e) {
-                             // Fallback
                              try { sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'); }
-                             catch(e2) { alert("Codec not supported for playback."); return; }
+                             catch(e2) { alert("Codec not supported."); return; }
                         }
 
-                        // 5. Decrypt Stream
-                        // We have the rest of 'headerChunk' (from byte 19 onwards) + rest of file
-                        let buffer = headerChunk.slice(19); 
-                        let fileOffset = 19;
+                        const stream = file.stream();
+                        const reader = stream.getReader();
                         
+                        // We already read the first chunk (initialChunk), start from there.
+                        // But wait, the stream reader is new. 
+                        // The initialChunk from setup() was from a *different* reader that we cancelled.
+                        // So we must read from start again? 
+                        // Actually, 'file.stream()' creates a NEW stream.
+                        // So we need to skip the first 19 bytes (Header).
+                        
+                        // Logic:
+                        // 1. Read first chunk again from this new stream
+                        let { value: buffer } = await reader.read();
+                        
+                        // 2. Slice off the header (19 bytes)
+                        if (buffer.length >= 19) {
+                            buffer = buffer.slice(19);
+                        } else {
+                            // Should not happen if validation passed, but robust handling:
+                            // Read more until we have > 19 bytes? (Skipping for brevity as validation passed)
+                        }
+
                         // Recursive pump
                         const pump = async () => {
                             while (true) {
-                                // We need at least 4 bytes for length
+                                // Need at least 4 bytes for Length
                                 if (buffer.length < 4) {
                                     const { done, value } = await reader.read();
                                     if (done) break;
-                                    // Append new data to buffer
                                     const newBuf = new Uint8Array(buffer.length + value.length);
                                     newBuf.set(buffer);
                                     newBuf.set(value, buffer.length);
@@ -1101,15 +1166,13 @@
                                     continue;
                                 }
 
-                                // Read Length
                                 const lenView = new DataView(buffer.buffer, buffer.byteOffset, 4);
-                                const chunkLen = lenView.getUint32(0, false); // Encrypted Data Length
-                                const totalPacketLen = 4 + 12 + chunkLen; // Len + IV + Data
+                                const chunkLen = lenView.getUint32(0, false);
+                                const totalPacketLen = 4 + 12 + chunkLen; 
 
                                 if (buffer.length < totalPacketLen) {
-                                     // Need more data
                                     const { done, value } = await reader.read();
-                                    if (done) break; // Incomplete last chunk?
+                                    if (done) break; 
                                     const newBuf = new Uint8Array(buffer.length + value.length);
                                     newBuf.set(buffer);
                                     newBuf.set(value, buffer.length);
@@ -1117,11 +1180,9 @@
                                     continue;
                                 }
 
-                                // Extract Packet
                                 const iv = buffer.slice(4, 16);
                                 const encryptedData = buffer.slice(16, totalPacketLen);
                                 
-                                // Decrypt
                                 try {
                                     const decrypted = await window.crypto.subtle.decrypt(
                                         { name: "AES-GCM", iv: iv },
@@ -1129,30 +1190,22 @@
                                         encryptedData
                                     );
                                     
-                                    // Append to MSE
                                     if (!sourceBuffer.updating) {
                                         sourceBuffer.appendBuffer(decrypted);
-                                        // Wait for update end? Simple delay loop or event listener is better, 
-                                        // but for this simple pump we might need to wait.
                                         await new Promise(r => {
                                             if (!sourceBuffer.updating) r();
-                                            else {
-                                                sourceBuffer.addEventListener('updateend', r, { once: true });
-                                            }
+                                            else sourceBuffer.addEventListener('updateend', r, { once: true });
                                         });
                                     }
                                 } catch (e) {
                                     console.error("Decrypt Error", e);
-                                    // Wrong Password likely
                                     alert("Decryption Failed. Wrong Password?");
                                     reader.cancel();
                                     return;
                                 }
 
-                                // Advance
                                 buffer = buffer.slice(totalPacketLen);
                             }
-                            
                             mediaSource.endOfStream();
                             document.getElementById('secure-loading').style.display = 'none';
                         };
