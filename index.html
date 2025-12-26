@@ -942,6 +942,7 @@
         // --- SECURE VIDEO STATE ---
         let secureModeStandby = false;
         let secureCredentials = null; 
+        let secureFileHandle = null; // [NEW] Pre-selected file handle
         
         // Staging for View Mode
         let pendingSecureFile = null;
@@ -1081,6 +1082,17 @@
                     }
                     
                     if (authMode === 'record') {
+                        // [NEW] Select File Location BEFORE Standby
+                        try {
+                            secureFileHandle = await window.showSaveFilePicker({
+                                suggestedName: `secure-video-${Date.now()}.se6`,
+                                types: [{ description: 'Secure Video', accept: { 'application/octet-stream': ['.se6'] } }]
+                            });
+                        } catch (pickerErr) {
+                            // User cancelled file selection, abort setup
+                            return;
+                        }
+
                         // Enter Secure Standby
                         secureCredentials = { master, priv };
                         secureModeStandby = true;
@@ -1092,7 +1104,7 @@
                         recordBtnInner.style.borderColor = "#ffd700"; 
                         recordBtnInner.querySelector('.inner-circle').style.background = "#ffd700";
                         updateDynamicIsland("Secure Mode", "Standby", "gold");
-                        alert("Secure Mode Active. Next recording will be encrypted.");
+                        alert("Secure Mode Ready. Recording will start immediately.");
                         resetInputs(); 
 
                     } else {
@@ -1188,6 +1200,18 @@
                             console.log("SecurePlayer: Starting pump loop...");
                             try {
                                 while (true) {
+                                    // [FLOW CONTROL] Prevent overheating by throttling decryption
+                                    // If we have > 15 seconds buffered ahead, wait.
+                                    if (videoEl.buffered.length > 0) {
+                                        const bufferedEnd = videoEl.buffered.end(videoEl.buffered.length - 1);
+                                        const timeAhead = bufferedEnd - videoEl.currentTime;
+                                        
+                                        if (timeAhead > 15) {
+                                            // Wait for 1 second before processing next chunk
+                                            await new Promise(r => setTimeout(r, 1000));
+                                        }
+                                    }
+
                                     // Need at least 4 bytes for Length
                                     if (buffer.length < 4) {
                                         const { done, value } = await reader.read();
@@ -1228,8 +1252,9 @@
                                     }
 
                                     // Extract Packet
-                                    const iv = buffer.slice(4, 16);
-                                    const encryptedData = buffer.slice(16, totalPacketLen);
+                                    // [OPTIMIZATION] Use subarray to avoid copying large memory blocks
+                                    const iv = buffer.subarray(4, 16);
+                                    const encryptedData = buffer.subarray(16, totalPacketLen);
                                     
                                     try {
                                         const decrypted = await window.crypto.subtle.decrypt(
@@ -1259,7 +1284,7 @@
                                         return;
                                     }
 
-                                    buffer = buffer.slice(totalPacketLen);
+                                    buffer = buffer.subarray(totalPacketLen); // [OPTIMIZATION] Use subarray
                                 }
                             } catch (pumpErr) {
                                 console.error("SecurePlayer: Pump Loop Crashed", pumpErr);
@@ -2189,8 +2214,13 @@
                 const mimeType = getSupportedMimeType();
                 const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
 
+                // [NEW] Secure Mode Pre-Selected File Logic
+                if (secureModeStandby && secureFileHandle) {
+                     fileHandle = secureFileHandle;
+                     secureFileHandle = null; // Consume it
+                } 
                 // Auto-Save logic (Director Mode OR Default Folder)
-                if (saveDirectoryHandle) {
+                else if (saveDirectoryHandle) {
                     const filename = secureModeStandby 
                         ? `secure-take-${new Date().toISOString().replace(/[:.]/g, '-')}.se6`
                         : `take-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`;
