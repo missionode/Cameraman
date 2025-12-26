@@ -1028,17 +1028,20 @@
                         // 2. Validate Header Immediately
                         const stream = file.stream();
                         const reader = stream.getReader();
-                        const { value: headerChunk } = await reader.read();
+                        let { value: headerChunk } = await reader.read();
                         reader.cancel(); // Stop reading for now
 
                         if (!headerChunk || headerChunk.length < 19) {
-                            alert("File is too small or invalid.");
+                            alert("File is too small or invalid (Empty?).");
                             return;
                         }
 
-                        const magic = new TextDecoder().decode(headerChunk.slice(0, 3));
-                        if (magic !== 'SE6') {
-                            alert("Selected file is NOT a valid Secure Video (.se6).");
+                        // Check 'SE6' (83, 69, 54)
+                        const isSE6 = headerChunk[0] === 83 && headerChunk[1] === 69 && headerChunk[2] === 54;
+                        
+                        if (!isSE6) {
+                            const found = Array.from(headerChunk.slice(0, 3));
+                            alert(`Invalid File Format. Expected 'SE6' but found bytes: [${found}].\n\nDid you select a regular video file instead of a Secure Video?`);
                             return;
                         }
 
