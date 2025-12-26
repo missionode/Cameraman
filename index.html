@@ -738,6 +738,11 @@
                 <select id="color-grading"></select>
             </div>
 
+            <div class="settings-row">
+                <label for="video-resolution">Recording Quality</label>
+                <select id="video-resolution"></select>
+            </div>
+
             <div class="settings-group">
                 <label for="center-stage-toggle" style="justify-content: flex-start; gap: 12px;">
                     <input type="checkbox" id="center-stage-toggle">
@@ -891,6 +896,12 @@
                 { name: 'Bleach Bypass', value: 'bleach-bypass' },
                 { name: 'Teal & Orange', value: 'teal-orange' },
                 { name: 'Matrix', value: 'matrix' }
+            ],
+            resolutions: [
+                { name: '480p (SD)', value: 640 },
+                { name: '720p (HD)', value: 1280 },
+                { name: '1080p (Full HD)', value: 1920 },
+                { name: '4K (Ultra HD)', value: 3840 }
             ]
         };
 
@@ -915,11 +926,13 @@
         const closeSettingsBtn = document.getElementById('close-settings-btn');
         const aspectRatioSelect = document.getElementById('aspect-ratio');
         const colorGradingSelect = document.getElementById('color-grading');
+        const resolutionSelect = document.getElementById('video-resolution');
 
         // --- APP STATE ---
         let stream = null;
         let currentFacingMode = 'environment'; // Default to Back Camera for Mobile
         let currentAspectRatio = config.aspectRatios[0].value;
+        let currentResolution = config.resolutions[0].value; // Default 480p
         let centerStageEnabled = false;
         let movieModeEnabled = false;
         let directorModeEnabled = false;
@@ -1484,8 +1497,8 @@
 
             const constraints = {
                 video: {
-                    width: { ideal: 4096 },
-                    height: { ideal: 2160 },
+                    width: { ideal: currentResolution * (currentResolution > 1920 ? 1.77 : 1) }, // Heuristic for wide/tall
+                    height: { ideal: currentResolution },
                     aspectRatio: { ideal: currentAspectRatio },
                     facingMode: currentFacingMode
                 },
@@ -1576,7 +1589,7 @@
             }
 
             // Cap Resolution
-            const MAX_DIMENSION = 1280;
+            const MAX_DIMENSION = currentResolution;
             if (targetW > MAX_DIMENSION || targetH > MAX_DIMENSION) {
                 const scale = Math.min(MAX_DIMENSION / targetW, MAX_DIMENSION / targetH);
                 targetW *= scale;
@@ -1610,7 +1623,6 @@
 
             // [IMPROVED] Cinematic Spring Physics (SmoothDamp)
             // Behaves like Fitts's Law: Fast transit, precise stop.
-            const now = performance.now();
             const dt = Math.min((now - lastRenderTime) / 1000, 0.1);
             lastRenderTime = now;
 
@@ -1818,6 +1830,8 @@
         function populateSelectOptions() {
             aspectRatioSelect.innerHTML = '';
             colorGradingSelect.innerHTML = '';
+            resolutionSelect.innerHTML = '';
+
             config.aspectRatios.forEach(r => {
                 const opt = document.createElement('option');
                 opt.value = r.value;
@@ -1829,6 +1843,12 @@
                 opt.value = g.value;
                 opt.textContent = g.name;
                 colorGradingSelect.appendChild(opt);
+            });
+            config.resolutions.forEach(res => {
+                const opt = document.createElement('option');
+                opt.value = res.value;
+                opt.textContent = res.name;
+                resolutionSelect.appendChild(opt);
             });
         }
 
@@ -1847,6 +1867,11 @@
             // Listeners
             aspectRatioSelect.onchange = async () => {
                 currentAspectRatio = parseFloat(aspectRatioSelect.value);
+                await startCamera();
+            };
+
+            resolutionSelect.onchange = async () => {
+                currentResolution = parseInt(resolutionSelect.value);
                 await startCamera();
             };
 

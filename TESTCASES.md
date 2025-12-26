@@ -16,12 +16,12 @@ This document outlines the test strategy for the Cameraman application, covering
 
 | ID | Test Case | Steps | Expected Result | Priority | Status |
 |----|-----------|-------|-----------------|----------|--------|
-| **TC006** | Secure Mode Setup | 1. Go to **Settings** > **Privacy & Security** > **Secure Record**.<br>2. Enter **Master Key** and **Private Key**.<br>3. Click **Authenticate**. | **File Picker appears immediately** to select save location. Dynamic Island updates to "Secure Mode | Standby" (Gold). | High | |
-| **TC007** | Secure Recording Start | 1. Complete TC006 (Standby Mode).<br>2. Tap the main **Record** button. | Recording starts **immediately** without a second file prompt. Dynamic Island turns Red. | High | |
-| **TC008** | Secure File Generation | 1. Stop a secure recording.<br>2. Check the saved file size. | File saved with `.se6` extension. File size increases with duration. File is **not** playable in standard players (VLC, etc.). | High | |
-| **TC009** | Secure Playback (Success) | 1. Go to **Settings** > **View Secure**.<br>2. Select the `.se6` file.<br>3. Enter the **Correct** keys used for recording. | Video plays in the overlay. Seek bar loads correctly (does not jump to 90% immediately). Status shows "PLAYING SECURE STREAM". | High | |
-| **TC010** | Secure Playback (Failure) | 1. Attempt playback of `.se6` file with **Incorrect** keys. | Alert "Decryption Failed" appears. Video does not play. | High | |
-| **TC011** | Overheating Check | 1. Play a long Secure Video (>1 min). | Device temperature remains stable. Playback buffers intelligently (throttling logic active). | High | |
+| **TC006** | Secure Mode Setup | 1. Go to **Settings** > **Privacy & Security** > **Secure Record**.<br>2. Enter **Master Key** and **Private Key**.<br>3. Click **Authenticate**. | **File Picker appears immediately** to select save location. Dynamic Island updates to "Secure Mode | Standby" (Gold). | High | **Pass** |
+| **TC007** | Secure Recording Start | 1. Complete TC006 (Standby Mode).<br>2. Tap the main **Record** button. | Recording starts **immediately** without a second file prompt. Dynamic Island turns Red. | High | **Pass** |
+| **TC008** | Secure File Generation | 1. Stop a secure recording.<br>2. Check the saved file size. | File saved with `.se6` extension. File size increases with duration. File is **not** playable in standard players (VLC, etc.). | High | **Pass** |
+| **TC009** | Secure Playback (Success) | 1. Go to **Settings** > **View Secure**.<br>2. Select the `.se6` file.<br>3. Enter the **Correct** keys used for recording. | Video plays in the overlay. Seek bar loads correctly (does not jump to 90% immediately). Status shows "PLAYING SECURE STREAM". | High | **Pass** |
+| **TC010** | Secure Playback (Failure) | 1. Attempt playback of `.se6` file with **Incorrect** keys. | Alert "Decryption Failed" appears. Video does not play. | High | **Pass** |
+| **TC011** | Overheating Check | 1. Play a long Secure Video (>1 min). | Device temperature remains stable. Playback buffers intelligently (throttling logic active). | High | **Pass** |
 
 ## 3. AI & Vision Features
 
@@ -55,3 +55,4 @@ This document outlines the test strategy for the Cameraman application, covering
 | **TC022** | Persistent Storage | 1. Settings > **Choose Folder** > Select a folder.<br>2. Reload Page. | Selected folder name persists in Settings. New recordings save to that folder automatically. | High | |
 | **TC023** | Color Grading | 1. Settings > **Color Grading** > Select "Matrix". | Viewfinder changes tint immediately. Recorded video retains the look (if "Grade in Recording" on). | Low | |
 | **TC024** | Offline Access | 1. Disconnect Internet.<br>2. Reload Page. | App loads fully via Service Worker cache. UI functions normally. | High | |
+| **TC025** | Recording Quality | 1. Settings > **Recording Quality** > Select "1080p".<br>2. Record a video. | Video is recorded at 1080p resolution. Filesize is larger than 480p. | Medium | |
