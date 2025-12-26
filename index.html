@@ -651,6 +651,14 @@
             <input type="range" id="focus-distance" min="0" max="1" step="0.01" orient="vertical">
         </div>
 
+        <!-- Focus Toggle Button -->
+        <button id="focus-toggle-btn" class="control-btn-secondary" style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); z-index: 95; display: none;">
+            <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2" fill="none"/>
+                <circle cx="12" cy="12" r="3" fill="white"/>
+            </svg>
+        </button>
+
         <!-- Bottom Controls -->
         <div class="controls">
             <!-- Switch Cam: Rotate Icon -->
@@ -971,6 +979,7 @@
 
                 // 5. UX
                 setupUIHide();
+                setupFocusUI();
 
             } catch (e) {
                 console.error("Init failed:", e);
@@ -1052,11 +1061,14 @@
                 const capabilities = track.getCapabilities();
                 const settings = track.getSettings();
                 const sliderContainer = document.getElementById('focus-slider-container');
+                const focusToggleBtn = document.getElementById('focus-toggle-btn');
                 const focusInput = document.getElementById('focus-distance');
 
                 if (capabilities.focusMode && capabilities.focusMode.includes('manual') && capabilities.focusDistance) {
-                    sliderContainer.classList.add('visible'); // Show slider
-                    sliderContainer.style.pointerEvents = 'auto'; // Ensure clickable
+                    focusToggleBtn.style.display = 'flex'; // Show Toggle Button
+                    
+                    // Update slider values but keep it hidden
+                    sliderContainer.classList.remove('visible'); 
 
                     // Set bounds (usually 0.0 to 1.0 for mobile web)
                     focusInput.min = capabilities.focusDistance.min || 0;
@@ -1077,7 +1089,8 @@
                         }
                     };
                 } else {
-                    sliderContainer.classList.remove('visible'); // Hide if not supported
+                    sliderContainer.classList.remove('visible');
+                    focusToggleBtn.style.display = 'none';
                 }
 
                 updateDynamicIsland('Ready');
@@ -1677,6 +1690,31 @@
             container.onmousemove = show;
             container.ontouchstart = show;
             show();
+        }
+
+        function setupFocusUI() {
+            const focusToggleBtn = document.getElementById('focus-toggle-btn');
+            const sliderContainer = document.getElementById('focus-slider-container');
+
+            focusToggleBtn.onclick = (e) => {
+                e.stopPropagation();
+                sliderContainer.classList.add('visible');
+                sliderContainer.style.pointerEvents = 'auto';
+                focusToggleBtn.style.display = 'none';
+            };
+
+            sliderContainer.onclick = (e) => e.stopPropagation();
+
+            // Close when clicking outside
+            document.addEventListener('click', (e) => {
+                if (sliderContainer.classList.contains('visible') && e.target !== focusToggleBtn && !focusToggleBtn.contains(e.target)) {
+                    sliderContainer.classList.remove('visible');
+                    sliderContainer.style.pointerEvents = 'none';
+                    // Only show button if it's supposed to be available (simple check: if slider was visible, button probably should be too)
+                    // We can check if it was hidden by this interaction.
+                    focusToggleBtn.style.display = 'flex'; 
+                }
+            });
         }
 
         // --- MIC HANDOFF HELPERS ---
