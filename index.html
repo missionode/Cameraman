@@ -1323,6 +1323,10 @@
 
         // Performance / AI Resizing
         let lastRenderTime = performance.now();
+        let lastProcessedFrameTime = 0; // [NEW] For FPS Capping
+        const TARGET_FPS = 30; // [NEW] Cap viewfinder to 30FPS to prevent overheating
+        const FRAME_INTERVAL = 1000 / TARGET_FPS;
+
         let aiCanvas = null;
         let aiCtx = null;
 
@@ -1544,11 +1548,18 @@
         }
 
         // --- CANVAS LOOP (MAIN THREAD CONTROLLER) ---
-        async function canvasLoop() {
+        async function canvasLoop(now) {
             if (!video || video.paused || video.ended) {
                 requestAnimationFrame(canvasLoop);
                 return;
             }
+
+            // [OPTIMIZATION] FPS Capping to prevent overheating
+            if (now - lastProcessedFrameTime < FRAME_INTERVAL) {
+                requestAnimationFrame(canvasLoop);
+                return;
+            }
+            lastProcessedFrameTime = now;
 
             // --- 1. Calculate Logic (Layout, Crop, AI) ---
             
