@@ -2,6 +2,7 @@ let writableStream = null;
 let isSecure = false;
 let cryptoKey = null;
 let isClosing = false;
+let writeQueue = Promise.resolve(); // Serialize writes
 
 // Constants for SE6 Format
 const MAGIC_SIGNATURE = new TextEncoder().encode('SE6'); // 3 bytes
@@ -14,6 +15,7 @@ self.onmessage = async (event) => {
             const fileHandle = payload.fileHandle;
             isSecure = payload.isSecure || false;
             isClosing = false;
+            writeQueue = Promise.resolve();
             
             // Open file
             writableStream = await fileHandle.createWritable();
@@ -38,54 +40,59 @@ self.onmessage = async (event) => {
 
         } else if (type === 'write') {
             if (writableStream && !isClosing) {
-                try {
-                    const data = payload.data; // Blob
+                // Chain writes to ensure order
+                writeQueue = writeQueue.then(async () => {
+                    try {
+                        if (isClosing) return; // double check inside queue
 
-                    if (isSecure) {
-                        // --- ENCRYPTION PIPELINE ---
-                        
-                        // 1. Convert Blob to ArrayBuffer
-                        const arrayBuffer = await data.arrayBuffer();
+                        const data = payload.data; // Blob
 
-                        // 2. Generate unique IV for this chunk (12 bytes for AES-GCM)
-                        const iv = self.crypto.getRandomValues(new Uint8Array(12));
+                        if (isSecure) {
+                            // --- ENCRYPTION PIPELINE ---
+                            
+                            // 1. Convert Blob to ArrayBuffer
+                            const arrayBuffer = await data.arrayBuffer();
 
-                        // 3. Encrypt
-                        const encryptedBuffer = await self.crypto.subtle.encrypt(
-                            { name: "AES-GCM", iv: iv },
-                            cryptoKey,
-                            arrayBuffer
-                        );
+                            // 2. Generate unique IV for this chunk (12 bytes for AES-GCM)
+                            const iv = self.crypto.getRandomValues(new Uint8Array(12));
 
-                        // 4. Construct Packet: [Length (4 bytes)] + [IV (12 bytes)] + [Encrypted Data]
-                        const chunkLength = encryptedBuffer.byteLength;
-                        const lenBytes = new DataView(new ArrayBuffer(4));
-                        lenBytes.setUint32(0, chunkLength, false); // Big Endian
+                            // 3. Encrypt
+                            const encryptedBuffer = await self.crypto.subtle.encrypt(
+                                { name: "AES-GCM", iv: iv },
+                                cryptoKey,
+                                arrayBuffer
+                            );
 
-                        // 5. Write atomically
-                        if (!isClosing) {
-                             await writableStream.write(lenBytes);
-                             await writableStream.write(iv);
-                             await writableStream.write(encryptedBuffer);
+                            // 4. Construct Packet: [Length (4 bytes)] + [IV (12 bytes)] + [Encrypted Data]
+                            const chunkLength = encryptedBuffer.byteLength;
+                            
+                            // Optimize: Combine into single buffer to reduce I/O ops
+                            const packet = new Uint8Array(4 + 12 + chunkLength);
+                            const view = new DataView(packet.buffer);
+                            
+                            view.setUint32(0, chunkLength, false); // Big Endian
+                            packet.set(iv, 4);
+                            packet.set(new Uint8Array(encryptedBuffer), 16);
+
+                            // 5. Write atomically
+                            await writableStream.write(packet);
+
+                        } else {
+                            // Standard Write
+                            await writableStream.write(data);
                         }
-
-                    } else {
-                        // Standard Write
-                        if (!isClosing) await writableStream.write(data);
+                    } catch (writeErr) {
+                         console.error("Worker Write Error:", writeErr);
+                         self.postMessage({ type: 'error', error: writeErr.message });
                     }
-                } catch (writeErr) {
-                    // Ignore errors if we are closing (race condition)
-                    if (!isClosing) {
-                        console.error("Worker Write Error:", writeErr);
-                        self.postMessage({ type: 'error', error: writeErr.message });
-                    } else {
-                        console.warn("Worker: Write skipped (stream closing)");
-                    }
-                }
+                });
             }
 
         } else if (type === 'close') {
             isClosing = true;
+            // Wait for pending writes
+            await writeQueue;
+            
             if (writableStream) {
                 await writableStream.close();
                 writableStream = null;
