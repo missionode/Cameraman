@@ -1200,6 +1200,18 @@
                             console.log("SecurePlayer: Starting pump loop...");
                             try {
                                 while (true) {
+                                    // [FLOW CONTROL] Prevent overheating by throttling decryption
+                                    // If we have > 15 seconds buffered ahead, wait.
+                                    if (videoEl.buffered.length > 0) {
+                                        const bufferedEnd = videoEl.buffered.end(videoEl.buffered.length - 1);
+                                        const timeAhead = bufferedEnd - videoEl.currentTime;
+                                        
+                                        if (timeAhead > 15) {
+                                            // Wait for 1 second before processing next chunk
+                                            await new Promise(r => setTimeout(r, 1000));
+                                        }
+                                    }
+
                                     // Need at least 4 bytes for Length
                                     if (buffer.length < 4) {
                                         const { done, value } = await reader.read();
@@ -1272,7 +1284,7 @@
                                         return;
                                     }
 
-                                    buffer = buffer.slice(totalPacketLen);
+                                    buffer = buffer.subarray(totalPacketLen); // [OPTIMIZATION] Use subarray
                                 }
                             } catch (pumpErr) {
                                 console.error("SecurePlayer: Pump Loop Crashed", pumpErr);
