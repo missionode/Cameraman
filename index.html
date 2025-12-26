@@ -1048,12 +1048,13 @@
                         // 3. Store Context & Show Auth
                         pendingSecureFile = file;
                         pendingHeaderChunk = headerChunk;
-                        pendingSecureSalt = headerChunk.slice(3, 19);
+                        // [FIX] Copy salt to ensure it's stable
+                        pendingSecureSalt = new Uint8Array(headerChunk.slice(3, 19));
 
                         authMode = 'view';
                         resetInputs();
                         modal.classList.add('active');
-                        settingsModal.classList.remove('active'); // Close settings
+                        // settingsModal.classList.remove('active'); // Kept open per user request
                         masterInput.focus();
 
                     } catch (e) {
@@ -1079,23 +1080,26 @@
                         return;
                     }
                     
-                    // Clear UI immediately for security
-                    modal.classList.remove('active');
-                    settingsModal.classList.remove('active');
-
                     if (authMode === 'record') {
                         // Enter Secure Standby
                         secureCredentials = { master, priv };
                         secureModeStandby = true;
                         
+                        // Close both in record mode to show camera
+                        modal.classList.remove('active');
+                        settingsModal.classList.remove('active');
+
                         recordBtnInner.style.borderColor = "#ffd700"; 
                         recordBtnInner.querySelector('.inner-circle').style.background = "#ffd700";
                         updateDynamicIsland("Secure Mode", "Standby", "gold");
                         alert("Secure Mode Active. Next recording will be encrypted.");
-                        resetInputs(); // Clear memory of inputs
+                        resetInputs(); 
 
                     } else {
                         // View Mode
+                        // Only close the security modal, keep settings in background
+                        modal.classList.remove('active');
+
                         if (pendingSecureFile && pendingSecureSalt) {
                             this.startPlayer(master, priv, pendingSecureFile, pendingSecureSalt, pendingHeaderChunk);
                         }
@@ -1112,12 +1116,28 @@
                 };
             },
 
-            async startPlayer(master, priv, file, salt, initialChunk) {
+            async startPlayer(master, priv, file, _ignoredSalt, _ignoredChunk) {
                 try {
                     document.getElementById('secure-loading').style.display = 'block';
                     document.getElementById('secure-player-overlay').classList.add('active');
                     
+                    // 1. Read Header Freshly
+                    const stream = file.stream();
+                    const reader = stream.getReader();
+                    
+                    // Read first chunk (at least 19 bytes)
+                    let { value: buffer } = await reader.read();
+                    if (!buffer || buffer.length < 19) throw new Error("File too short");
+                    
+                    // Extract Salt
+                    const salt = buffer.slice(3, 19);
+                    console.log("SecurePlayer: Extracted Salt:", salt);
+
+                    // 2. Derive Key
                     const key = await this.deriveKey(master, priv, salt);
+                    
+                    // Slice off header from buffer for processing
+                    buffer = buffer.slice(19);
 
                     // Setup MSE
                     const videoEl = document.getElementById('secure-video-element');
@@ -1126,91 +1146,130 @@
 
                     mediaSource.addEventListener('sourceopen', async () => {
                         let sourceBuffer;
-                        try {
-                             sourceBuffer = mediaSource.addSourceBuffer('video/webm; codecs="vp8,opus"');
-                        } catch(e) {
-                             try { sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'); }
-                             catch(e2) { alert("Codec not supported."); return; }
+                        
+                        // [FIX] Match Recorder Priority: WebM -> MP4
+                        // WebM is much more reliable for MSE playback
+                        const codecsToTry = [
+                            'video/webm; codecs="vp9,opus"',
+                            'video/webm; codecs="vp8,opus"',
+                            'video/webm',
+                            'video/mp4; codecs="avc1"', // Generic Video Only
+                            'video/mp4; codecs="avc1.42E01E"', // Baseline Video Only
+                            'video/mp4; codecs="avc1.4d002a"', // Main Video Only
+                            'video/mp4; codecs="avc1.64002a"', // High Video Only
+                            'video/mp4; codecs="avc1.42E01E, mp4a.40.2"', // Baseline + Audio
+                            'video/mp4; codecs="avc1.4d002a, mp4a.40.2"' // Main + Audio
+                        ];
+
+                        let selectedMime = null;
+                        for (const mime of codecsToTry) {
+                            if (MediaSource.isTypeSupported(mime)) {
+                                selectedMime = mime;
+                                break;
+                            }
                         }
 
-                        const stream = file.stream();
-                        const reader = stream.getReader();
-                        
-                        // We already read the first chunk (initialChunk), start from there.
-                        // But wait, the stream reader is new. 
-                        // The initialChunk from setup() was from a *different* reader that we cancelled.
-                        // So we must read from start again? 
-                        // Actually, 'file.stream()' creates a NEW stream.
-                        // So we need to skip the first 19 bytes (Header).
-                        
-                        // Logic:
-                        // 1. Read first chunk again from this new stream
-                        let { value: buffer } = await reader.read();
-                        
-                        // 2. Slice off the header (19 bytes)
-                        if (buffer.length >= 19) {
-                            buffer = buffer.slice(19);
-                        } else {
-                            // Should not happen if validation passed, but robust handling:
-                            // Read more until we have > 19 bytes? (Skipping for brevity as validation passed)
+                        if (!selectedMime) {
+                             alert("Playback Error: No supported codecs found."); return;
                         }
+                        
+                        console.log("SecurePlayer: Selected Codec:", selectedMime);
+
+                        try {
+                             sourceBuffer = mediaSource.addSourceBuffer(selectedMime);
+                        } catch(e) {
+                             alert("SourceBuffer Error: " + e.message); return; 
+                        }
+
+                        let isFirstChunk = true;
 
                         // Recursive pump
                         const pump = async () => {
-                            while (true) {
-                                // Need at least 4 bytes for Length
-                                if (buffer.length < 4) {
-                                    const { done, value } = await reader.read();
-                                    if (done) break;
-                                    const newBuf = new Uint8Array(buffer.length + value.length);
-                                    newBuf.set(buffer);
-                                    newBuf.set(value, buffer.length);
-                                    buffer = newBuf;
-                                    continue;
-                                }
-
-                                const lenView = new DataView(buffer.buffer, buffer.byteOffset, 4);
-                                const chunkLen = lenView.getUint32(0, false);
-                                const totalPacketLen = 4 + 12 + chunkLen; 
-
-                                if (buffer.length < totalPacketLen) {
-                                    const { done, value } = await reader.read();
-                                    if (done) break; 
-                                    const newBuf = new Uint8Array(buffer.length + value.length);
-                                    newBuf.set(buffer);
-                                    newBuf.set(value, buffer.length);
-                                    buffer = newBuf;
-                                    continue;
-                                }
-
-                                const iv = buffer.slice(4, 16);
-                                const encryptedData = buffer.slice(16, totalPacketLen);
-                                
-                                try {
-                                    const decrypted = await window.crypto.subtle.decrypt(
-                                        { name: "AES-GCM", iv: iv },
-                                        key,
-                                        encryptedData
-                                    );
-                                    
-                                    if (!sourceBuffer.updating) {
-                                        sourceBuffer.appendBuffer(decrypted);
-                                        await new Promise(r => {
-                                            if (!sourceBuffer.updating) r();
-                                            else sourceBuffer.addEventListener('updateend', r, { once: true });
-                                        });
+                            console.log("SecurePlayer: Starting pump loop...");
+                            try {
+                                while (true) {
+                                    // Need at least 4 bytes for Length
+                                    if (buffer.length < 4) {
+                                        const { done, value } = await reader.read();
+                                        if (done) {
+                                            if (buffer.length > 0) console.warn("SecurePlayer: Leftover bytes at EOF:", buffer.length);
+                                            break;
+                                        }
+                                        const newBuf = new Uint8Array(buffer.length + value.length);
+                                        newBuf.set(buffer);
+                                        newBuf.set(value, buffer.length);
+                                        buffer = newBuf;
+                                        continue;
                                     }
-                                } catch (e) {
-                                    console.error("Decrypt Error", e);
-                                    alert("Decryption Failed. Wrong Password?");
-                                    reader.cancel();
-                                    return;
-                                }
 
-                                buffer = buffer.slice(totalPacketLen);
+                                    const lenView = new DataView(buffer.buffer, buffer.byteOffset, 4);
+                                    const chunkLen = lenView.getUint32(0, false);
+                                    
+                                    // [SANITY CHECK]
+                                    if (chunkLen > 100 * 1024 * 1024) { // 100MB max chunk
+                                         throw new Error(`Sanity Check Failed: Chunk length ${chunkLen} seems invalid. Sync lost?`);
+                                    }
+
+                                    const totalPacketLen = 4 + 12 + chunkLen; 
+
+                                    // console.log(`SecurePlayer: Packet. Data: ${chunkLen}, Total: ${totalPacketLen}, Buffered: ${buffer.length}`);
+
+                                    if (buffer.length < totalPacketLen) {
+                                        const { done, value } = await reader.read();
+                                        if (done) {
+                                            console.warn("SecurePlayer: File ended abruptly inside packet.");
+                                            break; 
+                                        }
+                                        const newBuf = new Uint8Array(buffer.length + value.length);
+                                        newBuf.set(buffer);
+                                        newBuf.set(value, buffer.length);
+                                        buffer = newBuf;
+                                        continue;
+                                    }
+
+                                    // Extract Packet
+                                    const iv = buffer.slice(4, 16);
+                                    const encryptedData = buffer.slice(16, totalPacketLen);
+                                    
+                                    try {
+                                        const decrypted = await window.crypto.subtle.decrypt(
+                                            { name: "AES-GCM", iv: iv },
+                                            key,
+                                            encryptedData
+                                        );
+                                        
+                                        if (!sourceBuffer.updating) {
+                                            sourceBuffer.appendBuffer(decrypted);
+                                            await new Promise(r => {
+                                                if (!sourceBuffer.updating) r();
+                                                else sourceBuffer.addEventListener('updateend', r, { once: true });
+                                            });
+
+                                            if (isFirstChunk) {
+                                                console.log("SecurePlayer: First chunk buffered. Playing...");
+                                                videoEl.play().catch(e => console.error("SecurePlayer: Play failed", e));
+                                                isFirstChunk = false;
+                                                document.getElementById('secure-loading').textContent = "PLAYING SECURE STREAM";
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.error("SecurePlayer: Decrypt/Append Error", e);
+                                        alert("Decryption Failed: Check Password or File Integrity.");
+                                        reader.cancel();
+                                        return;
+                                    }
+
+                                    buffer = buffer.slice(totalPacketLen);
+                                }
+                            } catch (pumpErr) {
+                                console.error("SecurePlayer: Pump Loop Crashed", pumpErr);
+                            } finally {
+                                if (mediaSource.readyState === 'open') {
+                                    mediaSource.endOfStream();
+                                    console.log("SecurePlayer: Stream ended normally.");
+                                }
+                                document.getElementById('secure-loading').style.display = 'none';
                             }
-                            mediaSource.endOfStream();
-                            document.getElementById('secure-loading').style.display = 'none';
                         };
                         
                         pump();
@@ -1281,7 +1340,8 @@
                 } catch (e) { console.warn("Failed to restore folder", e); }
 
                 // 2. Init Workers
-                recorderWorker = new Worker('recorder.worker.js');
+                // [FIX] Use version query to bust cache for secure mode update
+                recorderWorker = new Worker('recorder.worker.js?v=4');
                 recorderWorker.onmessage = handleWorkerMessage;
 
                 // [NEW] Init AI Offscreen Canvas for Downscaling
@@ -2172,6 +2232,8 @@
                 // [SECURE MODE LOGIC]
                 let workerPayload = { fileHandle: fileHandle };
                 
+                console.log("StartRecording: Standby:", secureModeStandby, "Creds:", !!secureCredentials);
+
                 if (secureModeStandby && secureCredentials) {
                     updateDynamicIsland("Securing...");
                     
@@ -2190,10 +2252,10 @@
                     workerPayload.key = key;
                     workerPayload.salt = salt;
                     
-                    // Note: We keep secureModeStandby = true so subsequent takes are also secure
-                    // until user cancels it (which we haven't added a button for yet, maybe toggle in settings?)
-                    // For now, it stays on until reload or maybe we should turn it off?
-                    // Let's keep it on for "session".
+                    console.log("StartRecording: Secure Payload Prepared. Salt:", salt);
+                    alert("Secure Recording Started! (Encrypted)");
+                } else {
+                    console.log("StartRecording: Standard Mode");
                 }
 
                 // [OPTIMIZATION] Transfer Handle to Worker
@@ -2391,10 +2453,10 @@
 
         function getSupportedMimeType() {
             const types = [
-                'video/mp4', // Prioritize MP4 (Better metadata/seek support)
                 'video/webm; codecs=vp9,opus',
                 'video/webm; codecs=vp8,opus',
-                'video/webm'
+                'video/webm',
+                'video/mp4'
             ];
             for (const type of types) {
                 if (MediaRecorder.isTypeSupported(type)) {
