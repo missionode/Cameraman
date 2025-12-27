@@ -1217,6 +1217,9 @@
 
                         try {
                              sourceBuffer = mediaSource.addSourceBuffer(selectedMime);
+                             // [FIX] "Sequence" mode ignores internal timestamps and appends chunks back-to-back.
+                             // This fixes "false progress" / seeking issues where MediaRecorder timestamps might be non-zero.
+                             sourceBuffer.mode = 'sequence';
                         } catch(e) {
                              alert("SourceBuffer Error: " + e.message); return; 
                         }
