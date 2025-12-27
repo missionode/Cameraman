@@ -27,9 +27,9 @@ This document outlines the test strategy for the Cameraman application, covering
 
 | ID | Test Case | Steps | Expected Result | Priority | Status |
 |----|-----------|-------|-----------------|----------|--------|
-| **TC012** | Center Stage Toggle | 1. Open **Settings**.<br>2. Enable **Center Stage (AI)**. | Camera digitally zooms/pans to keep the user's face centered. | Medium | |
-| **TC013** | Movie Mode Behavior | 1. Enable **Center Stage**.<br>2. Enable **Movie Mode**. | Crop becomes wider/cinematic. Movement tracking is smoother/slower (damping effect). | Low | |
-| **TC014** | Worker Stability | 1. Refresh the app.<br>2. Check Browser Console. | **No "document is not defined" error.** AI Worker initializes successfully using `OffscreenCanvas`. | High | |
+| **TC012** | Center Stage Toggle | 1. Open **Settings**.<br>2. Enable **Center Stage (AI)**. | Camera digitally zooms/pans to keep the user's face centered. | Medium | **Pass** |
+| **TC013** | Movie Mode Behavior | 1. Enable **Center Stage**.<br>2. Enable **Movie Mode**. | Crop becomes wider/cinematic. Movement tracking is smoother/slower (damping effect). | Low | **Pass** |
+| **TC014** | Worker Stability | 1. Refresh the app.<br>2. Check Browser Console. | **No "document is not defined" error.** AI Worker initializes successfully using `OffscreenCanvas`. | High | **Pass** |
 
 ## 4. Director Mode (Voice Control)
 
