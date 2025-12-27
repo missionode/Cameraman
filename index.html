@@ -1728,9 +1728,10 @@
             const detections = payload.detections;
 
             if (detections && detections.length > 0) {
-                // 1. Calculate Weighted Centroid
+                // 1. Calculate Group Boundaries (Face Only)
                 let totalX = 0, totalY = 0;
                 let minX = 1, maxX = 0;
+                let minY = 1, maxY = 0;
 
                 detections.forEach(d => {
                     const b = d.boundingBox;
@@ -1741,18 +1742,36 @@
 
                     const nx = b.originX / video.videoWidth;
                     const nw = b.width / video.videoWidth;
+                    const ny = b.originY / video.videoHeight;
+                    const nh = b.height / video.videoHeight;
+
                     if (nx < minX) minX = nx;
                     if (nx + nw > maxX) maxX = nx + nw;
+                    if (ny < minY) minY = ny;
+                    if (ny + nh > maxY) maxY = ny + nh;
                 });
 
                 const rawCentroidX = totalX / detections.length;
                 const rawCentroidY = totalY / detections.length;
                 const rawFaceWidth = maxX - minX;
+                const rawFaceHeight = maxY - minY;
+
+                // [NEW] Virtual Body Inference
+                // Since we only detect faces, we estimate the body size to frame naturally.
+                // Shoulders: ~2.5x Face Width | Torso: ~2.0x Face Height downwards
+                const virtualBodyWidth = rawFaceWidth * 2.5; 
+                const virtualBodyHeight = rawFaceHeight * 2.0;
+
+                // Expand boundaries to include "Virtual Body"
+                const bodyMinX = rawCentroidX - virtualBodyWidth / 2;
+                const bodyMaxX = rawCentroidX + virtualBodyWidth / 2;
+                const bodyMaxY = maxY + virtualBodyHeight; // Extend downwards only
+                // Keep Top (minY) tight to head + small buffer
 
                 // [IMPROVED] Hysteresis / Deadzone
                 const deadzone = 0.02; 
                 if (Math.abs(rawCentroidX - smoothCentroidX) > deadzone) {
-                    smoothCentroidX += (rawCentroidX - smoothCentroidX) * 0.15; // Faster update from worker data
+                    smoothCentroidX += (rawCentroidX - smoothCentroidX) * 0.15;
                 }
                 if (Math.abs(rawCentroidY - smoothCentroidY) > deadzone) {
                     smoothCentroidY += (rawCentroidY - smoothCentroidY) * 0.15;
@@ -1761,8 +1780,10 @@
                     smoothFaceWidth += (rawFaceWidth - smoothFaceWidth) * 0.15;
                 }
 
+                // 2. Calculate Ideal Zoom (Crop Size)
                 let desiredCropWidth;
 
+                // A. Heuristic Zoom (Standard Framing)
                 if (movieModeEnabled) {
                     desiredCropWidth = Math.min(1.0, smoothFaceWidth * 7.0);
                     desiredCropWidth = Math.max(0.6, desiredCropWidth);
@@ -1771,32 +1792,71 @@
                     desiredCropWidth = Math.max(0.5, desiredCropWidth);
                 }
 
-                // Apply Aspect Ratio
-                let w = desiredCropWidth;
-                let h = w;
+                // B. [CRITICAL] Fit-to-Subject Guarantee (Using Virtual Body)
+                // Calculate minimum dimensions needed to hold the EXTENDED body box + Safety Buffer
+                const bufferX = rawFaceWidth * 0.20; 
+                const bufferY = rawFaceHeight * 0.20;
+                
+                // Check against Virtual Body Boundaries
+                const requiredWidth = (bodyMaxX - bodyMinX) + bufferX;
+                
+                // For height, we want Head to (Head + Torso)
+                const requiredHeight = (bodyMaxY - minY) + bufferY;
+
+                // Apply Aspect Ratio Constraints to find minimum safe 'w'
                 const screenAspect = video.videoWidth / video.videoHeight;
                 const ratioMultiplier = currentAspectRatio / screenAspect;
 
-                if (ratioMultiplier > 1) {
-                    h = w / ratioMultiplier;
-                } else {
-                    w = 1 * ratioMultiplier; 
-                    h = w / ratioMultiplier;
-                }
+                // If we set width = W, then height = W / ratioMultiplier.
+                // We need: W >= requiredWidth  AND  W / ratioMultiplier >= requiredHeight
+                const safeW_for_width = requiredWidth;
+                const safeW_for_height = requiredHeight * ratioMultiplier;
+                const minSafeW = Math.max(safeW_for_width, safeW_for_height);
+
+                // Force zoom out if heuristic is too tight
+                let w = Math.max(desiredCropWidth, minSafeW);
                 
-                if (w > 1.0) { w = 1.0; h = w / ratioMultiplier; }
-                if (h > 1.0) { h = 1.0; w = h * ratioMultiplier; }
+                // Cap at 1.0 (Sensor Limit)
+                if (w > 1.0) w = 1.0;
+
+                // Calculate resulting H
+                let h = w / ratioMultiplier;
+
+                // Handle case where H exceeds sensor (1.0) due to aspect ratio mismatch
+                if (h > 1.0) { 
+                    h = 1.0; 
+                    w = h * ratioMultiplier; 
+                }
 
                 // 3. Position the Crop
                 let x = smoothCentroidX - w / 2;
                 let y = smoothCentroidY - h / 2;
 
-                if (movieModeEnabled) {
+                // [OPTIMIZATION] Portrait Mode Logic
+                const isPortrait = currentAspectRatio < 1.0;
+                if (movieModeEnabled && !isPortrait) {
                     y = smoothCentroidY - h * 0.4;
                 } else {
                     y = smoothCentroidY - h * 0.5;
                 }
 
+                // [OPTIMIZATION] Safety Clamp (Viewport Protection)
+                // Use the precise VIRTUAL boundaries for clamping
+                // We don't want to crop the shoulders if possible.
+                const subjLeft = bodyMinX - bufferX * 0.5; 
+                const subjRight = bodyMaxX + bufferX * 0.5;
+                const subjTop = minY - bufferY * 0.5; // Top of head
+                const subjBottom = bodyMaxY + bufferY * 0.5; // Bottom of torso
+
+                // 1. Shift Window if cutting off Left/Right
+                if (x > subjLeft) x = subjLeft; 
+                if (x + w < subjRight) x = subjRight - w; 
+
+                // 2. Shift Window if cutting off Top/Bottom
+                if (y > subjTop) y = subjTop;
+                if (y + h < subjBottom) y = subjBottom - h;
+
+                // 3. Final Hard Clamp to Sensor Bounds
                 x = Math.max(0, Math.min(1 - w, x));
                 y = Math.max(0, Math.min(1 - h, y));
 
