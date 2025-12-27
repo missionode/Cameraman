@@ -63,19 +63,18 @@ self.onmessage = async (event) => {
                                 arrayBuffer
                             );
 
-                            // 4. Construct Packet: [Length (4 bytes)] + [IV (12 bytes)] + [Encrypted Data]
-                            const chunkLength = encryptedBuffer.byteLength;
+                            // 4. Construct Headers: [Length (4 bytes)] + [IV (12 bytes)]
+                            // [OPTIMIZATION] Split writes to avoid allocating a massive new buffer for concatenation
+                            // This saves ~100% memory overhead per chunk (no second copy of the encrypted data)
                             
-                            // Optimize: Combine into single buffer to reduce I/O ops
-                            const packet = new Uint8Array(4 + 12 + chunkLength);
-                            const view = new DataView(packet.buffer);
-                            
+                            const header = new Uint8Array(4 + 12);
+                            const view = new DataView(header.buffer);
                             view.setUint32(0, chunkLength, false); // Big Endian
-                            packet.set(iv, 4);
-                            packet.set(new Uint8Array(encryptedBuffer), 16);
+                            header.set(iv, 4);
 
-                            // 5. Write atomically
-                            await writableStream.write(packet);
+                            // 5. Write atomically (Stream preserves order)
+                            await writableStream.write(header);
+                            await writableStream.write(encryptedBuffer);
 
                         } else {
                             // Standard Write

@@ -2364,7 +2364,12 @@
                     updateDynamicIsland("Recording (Tap to Stop)");
                 }
 
-                mediaRecorder = new MediaRecorder(combinedStream, { mimeType: mimeType, videoBitsPerSecond: 10000000 });
+                // [OPTIMIZATION] High Bitrate for Quality
+                let bitrate = 10000000; // Default 10Mbps
+                if (currentResolution >= 3840) bitrate = 80000000; // 80 Mbps for 4K
+                else if (currentResolution >= 1920) bitrate = 25000000; // 25 Mbps for 1080p
+
+                mediaRecorder = new MediaRecorder(combinedStream, { mimeType: mimeType, videoBitsPerSecond: bitrate });
 
                 // Store audio track to stop it later
                 mediaRecorder.audioTrack = audioTrack;
