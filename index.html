@@ -29,11 +29,17 @@
 
             /* Responsive Sizes using Clamp */
             --space-safe: clamp(16px, 5vw, 32px);
-            --btn-size-sm: clamp(44px, 12vw, 52px);
-            --btn-size-lg: clamp(56px, 16vw, 72px);
-            --btn-record: clamp(72px, 22vw, 96px);
-            --icon-size-sm: clamp(20px, 5vw, 24px);
-            --icon-size-lg: clamp(24px, 6vw, 30px);
+            
+            /* [UPDATED] Refined sizes for a more elegant, less crowded UI */
+            /* Minimum 44px maintained for Apple HIG Touch Targets */
+            --btn-size-sm: clamp(44px, 11vw, 48px);
+            --btn-size-lg: clamp(52px, 14vw, 62px);
+            --btn-record: clamp(70px, 18vw, 86px);
+            
+            /* Smaller icons = More perception of padding/air */
+            --icon-size-sm: clamp(18px, 4.5vw, 20px);
+            --icon-size-lg: clamp(22px, 5.5vw, 26px);
+            
             --radius-sm: 18px;
             --radius-lg: 32px;
         }
