@@ -733,7 +733,7 @@
                 <select id="aspect-ratio"></select>
             </div>
 
-            <div class="settings-row">
+            <div class="settings-row" id="color-grading-row">
                 <label for="color-grading">Color Grading</label>
                 <select id="color-grading"></select>
             </div>
@@ -759,7 +759,7 @@
             </div>
 
 
-            <div class="settings-group">
+            <div class="settings-group" id="grade-recording-group">
                 <label for="apply-grade-to-video" style="justify-content: flex-start; gap: 10px;">
                     <input type="checkbox" id="apply-grade-to-video">
                     <span>Grade in Recording</span>
@@ -1894,11 +1894,31 @@
             const csToggle = document.getElementById('center-stage-toggle');
             const mmContainer = document.getElementById('movie-mode-container');
             const mmToggle = document.getElementById('movie-mode-toggle');
+            const colorGradingRow = document.getElementById('color-grading-row');
+            const gradeRecordingGroup = document.getElementById('grade-recording-group');
 
             csToggle.addEventListener('change', (e) => {
                 centerStageEnabled = e.target.checked;
                 // Show/Hide Movie Mode
                 mmContainer.style.display = centerStageEnabled ? 'block' : 'none';
+
+                // [OPTIMIZATION] Mutually Exclusive Features
+                // Center Stage (AI) and Color Grading (Pixel Processing) are both heavy.
+                // Disable Grading when AI is on to ensure smooth performance.
+                if (centerStageEnabled) {
+                    // Turn off grading
+                    colorGradingSelect.value = 'none';
+                    applyGradeToVideo = false;
+                    document.getElementById('apply-grade-to-video').checked = false;
+                    
+                    // Hide UI to prevent confusion
+                    colorGradingRow.style.display = 'none';
+                    gradeRecordingGroup.style.display = 'none';
+                } else {
+                    // Restore UI
+                    colorGradingRow.style.display = 'flex';
+                    gradeRecordingGroup.style.display = 'block';
+                }
 
                 // No need to reset targetCrop manually here, the main loop handles it.
             });
