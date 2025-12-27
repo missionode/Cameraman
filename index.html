@@ -938,6 +938,7 @@
         let directorModeEnabled = false;
         let applyGradeToVideo = true;
         let isRecording = false;
+        let isPreparingToRecord = false; // [NEW] Pre-warm high quality mode
         let isCountingDown = false; // Guard against multiple triggers
         let isHandingOverMic = false; // Guard against onend restart
         let faceDetector = null;
@@ -1588,8 +1589,14 @@
                 targetW = targetH * currentAspectRatio;
             }
 
+            // [OPTIMIZATION] Dynamic Resolution Scaling (Idle Power Save)
+            // When just framing (Idle), cap at 1080p to save ~75% GPU/Heat.
+            // Instantly switch to Full Resolution (e.g. 4K) when Recording/Preparing.
+            const isHighPerf = isRecording || isCountingDown || isPreparingToRecord;
+            const effectiveMaxRes = isHighPerf ? currentResolution : Math.min(currentResolution, 1920);
+
             // Cap Resolution
-            const MAX_DIMENSION = currentResolution;
+            const MAX_DIMENSION = effectiveMaxRes;
             if (targetW > MAX_DIMENSION || targetH > MAX_DIMENSION) {
                 const scale = Math.min(MAX_DIMENSION / targetW, MAX_DIMENSION / targetH);
                 targetW *= scale;
@@ -1680,29 +1687,34 @@
             if (isAIWorkerBusy) return;
 
             const now = performance.now();
-            if (now - lastDetectionTime < 40) return; // Cap at ~25FPS sending rate
+            
+            // [OPTIMIZATION] AI Throttling (Cool Down)
+            const interval = (isRecording || isCountingDown || isPreparingToRecord) ? 40 : 150;
+
+            if (now - lastDetectionTime < interval) return; 
             lastDetectionTime = now;
 
             try {
                 isAIWorkerBusy = true;
                 
-                // [OPTIMIZATION] Downscale for AI (Fixes Mobile Latency)
-                // Match aspect roughly or just squash - performance is key.
-                if (aiCtx && video.videoWidth > 0) {
-                    aiCtx.drawImage(video, 0, 0, aiCanvas.width, aiCanvas.height);
-                    const bitmap = await createImageBitmap(aiCanvas);
-                    aiWorker.postMessage({
-                        type: 'detect',
-                        payload: { bitmap: bitmap }
-                    }, [bitmap]);
-                } else {
-                     // Fallback
-                    const bitmap = await createImageBitmap(video);
-                    aiWorker.postMessage({
-                        type: 'detect',
-                        payload: { bitmap: bitmap }
-                    }, [bitmap]);
-                }
+                // [OPTIMIZATION] Direct Browser Downscaling
+                // Uses GPU/Compositor to create a small bitmap directly from the video element.
+                // Removes the need for an intermediate 2D Context draw call on the main thread.
+                const scaleWidth = 320;
+                const ratio = video.videoHeight / video.videoWidth;
+                const scaleHeight = Math.floor(scaleWidth * ratio);
+
+                const bitmap = await createImageBitmap(video, { 
+                    resizeWidth: scaleWidth, 
+                    resizeHeight: scaleHeight,
+                    resizeQuality: 'low' // Fast resizing for detection
+                });
+
+                aiWorker.postMessage({
+                    type: 'detect',
+                    payload: { bitmap: bitmap }
+                }, [bitmap]);
+
             } catch (e) {
                 isAIWorkerBusy = false;
             }
@@ -2254,10 +2266,14 @@
         async function startRecording() {
             if (isRecording) return;
 
+            // [OPTIMIZATION] Trigger High-Res Mode immediately
+            isPreparingToRecord = true;
+
             // 1. [FIX] Graceful Mic Handoff
             await prepareMicForRecording();
 
             // Additional small delay for OS audio layer to settle
+            // Also gives time for the canvas resolution to bump up to 4K
             await new Promise(r => setTimeout(r, 300));
 
             try {
@@ -2404,6 +2420,7 @@
 
                 mediaRecorder.start(1000);
                 isRecording = true;
+                isPreparingToRecord = false; // Handover complete
                 recordingStartTime = Date.now();
 
                 dynamicIsland.classList.add('recording');
@@ -2414,6 +2431,7 @@
 
             } catch (e) {
                 console.error(e);
+                isPreparingToRecord = false; // Reset on error
                 // Show specific error in UI
                 let msg = "Start Failed";
                 if (e.message.includes("Mic Busy")) msg = "Mic Busy (Retry)";
