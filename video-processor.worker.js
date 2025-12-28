@@ -12,7 +12,7 @@ const gradingDefinitions = {
     'matrix': [{ mode: 'saturation', color: '#807e7e8b' }, { mode: 'overlay', color: 'rgba(136, 240, 136, 0.4)' }, { mode: 'multiply', color: 'rgba(0, 50, 0, 0.2)' }],
     'kgf': [{ mode: 'color', color: 'rgba(180, 140, 60, 0.2)' }, { mode: 'multiply', color: 'rgba(20, 10, 0, 0.15)' }, { mode: 'overlay', color: 'rgba(200, 150, 50, 0.10)' }],
     'salaar': [{ mode: 'saturation', color: '#60686b99' }, { mode: 'multiply', color: 'rgba(20, 30, 40, 0.24)' }, { mode: 'hard-light', color: 'rgba(0, 0, 0, 0.1)' }],
-    'empuraan': [{ mode: 'soft-light', color: 'rgba(255, 231, 220, 0.21)' }, { mode: 'screen', color: 'rgba(255, 183, 150, 0.33)' }],
+    'empuraan': [{ mode: 'soft-light', color: 'rgba(255, 170, 90, 0.25)' }, { mode: 'multiply', color: 'rgba(20, 30, 48, 0.15)' }, { mode: 'screen', color: 'rgba(255, 245, 230, 0.10)' }],
     'meiyazhagan': [{ mode: 'soft-light', color: 'rgba(255, 240, 220, 0.3)' }, { mode: 'screen', color: 'rgba(255, 200, 150, 0.1)' }]
 };
 
