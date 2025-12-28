@@ -68,6 +68,7 @@ self.onmessage = async (event) => {
                             // This saves ~100% memory overhead per chunk (no second copy of the encrypted data)
                             
                             const header = new Uint8Array(4 + 12);
+                            const chunkLength = encryptedBuffer.byteLength;
                             const view = new DataView(header.buffer);
                             view.setUint32(0, chunkLength, false); // Big Endian
                             header.set(iv, 4);

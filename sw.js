@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cameraman-pwa-v12';
+const CACHE_NAME = 'cameraman-pwa-v21';
 const urlsToCache = [
   '/',
   '/index.html',
