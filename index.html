@@ -1749,6 +1749,11 @@
             const detections = payload.detections;
 
             if (detections && detections.length > 0) {
+                // [FIX] Recalculate AI Input Dimensions to normalize coordinates correctly
+                // MediaPipe returns pixels relative to the downscaled image (320px width)
+                const aiInputWidth = 320;
+                const aiInputHeight = Math.floor(aiInputWidth * video.videoHeight / video.videoWidth);
+
                 // 1. Calculate Group Boundaries (Face Only)
                 let totalX = 0, totalY = 0;
                 let minX = 1, maxX = 0;
@@ -1756,15 +1761,16 @@
 
                 detections.forEach(d => {
                     const b = d.boundingBox;
-                    const cx = (b.originX + b.width / 2) / video.videoWidth;
-                    const cy = (b.originY + b.height / 2) / video.videoHeight;
+                    // Normalize using AI Input Dimensions, NOT Video Dimensions
+                    const cx = (b.originX + b.width / 2) / aiInputWidth;
+                    const cy = (b.originY + b.height / 2) / aiInputHeight;
                     totalX += cx;
                     totalY += cy;
 
-                    const nx = b.originX / video.videoWidth;
-                    const nw = b.width / video.videoWidth;
-                    const ny = b.originY / video.videoHeight;
-                    const nh = b.height / video.videoHeight;
+                    const nx = b.originX / aiInputWidth;
+                    const nw = b.width / aiInputWidth;
+                    const ny = b.originY / aiInputHeight;
+                    const nh = b.height / aiInputHeight;
 
                     if (nx < minX) minX = nx;
                     if (nx + nw > maxX) maxX = nx + nw;
@@ -1805,12 +1811,16 @@
                 let desiredCropWidth;
 
                 // A. Heuristic Zoom (Standard Framing)
+                // [IMPROVED] Zoom Cap: Don't go tighter than 70% (0.7) of sensor width
+                // This prevents "claustrophobic" close-ups on standard webcams.
+                const MIN_CROP_WIDTH = 0.7; 
+
                 if (movieModeEnabled) {
-                    desiredCropWidth = Math.min(1.0, smoothFaceWidth * 7.0);
-                    desiredCropWidth = Math.max(0.6, desiredCropWidth);
+                    desiredCropWidth = Math.min(1.0, smoothFaceWidth * 6.0);
+                    desiredCropWidth = Math.max(MIN_CROP_WIDTH, desiredCropWidth);
                 } else {
-                    desiredCropWidth = Math.min(1.0, smoothFaceWidth * 4.0);
-                    desiredCropWidth = Math.max(0.5, desiredCropWidth);
+                    desiredCropWidth = Math.min(1.0, smoothFaceWidth * 3.5);
+                    desiredCropWidth = Math.max(MIN_CROP_WIDTH, desiredCropWidth);
                 }
 
                 // B. [CRITICAL] Fit-to-Subject Guarantee (Using Virtual Body)
@@ -1849,34 +1859,20 @@
                     w = h * ratioMultiplier; 
                 }
 
-                // 3. Position the Crop
+                // 3. Position the Crop (Cinematic)
                 let x = smoothCentroidX - w / 2;
-                let y = smoothCentroidY - h / 2;
+                
+                // [IMPROVED] Headroom: Place eyes at top 42% instead of 50% (Center)
+                // This mimics the "Rule of Thirds" vertical placement for interviews
+                let y = smoothCentroidY - (h * 0.42);
 
-                // [OPTIMIZATION] Portrait Mode Logic
-                const isPortrait = currentAspectRatio < 1.0;
-                if (movieModeEnabled && !isPortrait) {
-                    y = smoothCentroidY - h * 0.4;
-                } else {
-                    y = smoothCentroidY - h * 0.5;
+                // [IMPROVED] Deadzone: Ignore tiny movements (< 1.5%) to lock shot
+                if (targetCrop && Math.abs(x - targetCrop.x) < 0.015 && Math.abs(y - targetCrop.y) < 0.015) {
+                    x = targetCrop.x;
+                    y = targetCrop.y;
                 }
 
                 // [OPTIMIZATION] Safety Clamp (Viewport Protection)
-                // Use the precise VIRTUAL boundaries for clamping
-                // We don't want to crop the shoulders if possible.
-                const subjLeft = bodyMinX - bufferX * 0.5; 
-                const subjRight = bodyMaxX + bufferX * 0.5;
-                const subjTop = minY - bufferY * 0.5; // Top of head
-                const subjBottom = bodyMaxY + bufferY * 0.5; // Bottom of torso
-
-                // 1. Shift Window if cutting off Left/Right
-                if (x > subjLeft) x = subjLeft; 
-                if (x + w < subjRight) x = subjRight - w; 
-
-                // 2. Shift Window if cutting off Top/Bottom
-                if (y > subjTop) y = subjTop;
-                if (y + h < subjBottom) y = subjBottom - h;
-
                 // 3. Final Hard Clamp to Sensor Bounds
                 x = Math.max(0, Math.min(1 - w, x));
                 y = Math.max(0, Math.min(1 - h, y));
