@@ -1,7 +1,7 @@
 {
-  "name": "Centre Stage Camera",
-  "short_name": "CentreStage",
-  "description": "A simple and clean camera app with pro features for Cinematographers.",
+  "name": "Cameraman Pro",
+  "short_name": "Cameraman",
+  "description": "The AI-powered professional video camera for the web.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",
