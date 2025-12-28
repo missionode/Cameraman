@@ -1,15 +1,15 @@
-const CACHE_NAME = 'cameraman-pwa-v26';
+const CACHE_NAME = 'cameraman-pwa-v27';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/handbook.json',
-  '/recorder.worker.js',
-  '/video-processor.worker.js',
-  '/ai-v2.worker.js',
-  '/vision_classic.js',
-  '/icon-192.svg',
-  '/icon-512.svg'
+  './',
+  './index.html',
+  './manifest.json',
+  './handbook.json',
+  './recorder.worker.js',
+  './video-processor.worker.js',
+  './ai-v2.worker.js',
+  './vision_classic.js',
+  './icon-192.svg',
+  './icon-512.svg'
 ];
 
 self.addEventListener('install', event => {
