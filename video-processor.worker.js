@@ -10,7 +10,7 @@ const gradingDefinitions = {
     'bleach-bypass': [{ mode: 'saturation', color: '#55555586' }, { mode: 'overlay', color: 'rgba(255,255,255,0.3)' }, { mode: 'multiply', color: 'rgba(0,0,0,0.3)' }],
     'teal-orange': [{ mode: 'overlay', gradient: { stops: [[0, 'rgba(0, 255, 21, 0.21)'], [1, 'rgba(255, 165, 0, 0.6)']], type: 'linear' } }],
     'matrix': [{ mode: 'saturation', color: '#807e7e8b' }, { mode: 'overlay', color: 'rgba(136, 240, 136, 0.4)' }, { mode: 'multiply', color: 'rgba(0, 50, 0, 0.2)' }],
-    'kgf': [{ mode: 'color', color: 'rgba(180, 140, 60, 0.2)' }, { mode: 'multiply', color: 'rgba(20, 10, 0, 0.15)' }, { mode: 'overlay', color: 'rgba(200, 150, 50, 0.10)' }],
+    'kgf': [{ mode: 'soft-light', color: 'rgba(218, 143, 13, 0.35)' },{ mode: 'multiply', color: 'rgba(20, 20, 20, 0.40)' },{ mode: 'overlay', color: 'rgba(161, 100, 39, 0.20)' },{ mode: 'screen', color: 'rgba(255, 211, 152, 0.15)' }],
     'salaar': [{ mode: 'saturation', color: '#60686b99' }, { mode: 'multiply', color: 'rgba(20, 30, 40, 0.24)' }, { mode: 'hard-light', color: 'rgba(0, 0, 0, 0.1)' }],
     'empuraan': [{ mode: 'soft-light', color: 'rgba(255, 170, 90, 0.25)' }, { mode: 'multiply', color: 'rgba(20, 30, 48, 0.15)' }, { mode: 'screen', color: 'rgba(255, 245, 230, 0.10)' }],
     'meiyazhagan': [{ mode: 'soft-light', color: 'rgba(255, 240, 220, 0.3)' }, { mode: 'screen', color: 'rgba(255, 200, 150, 0.1)' }]
