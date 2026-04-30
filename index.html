@@ -1557,11 +1557,7 @@
                     aspectRatio: { ideal: currentAspectRatio },
                     facingMode: currentFacingMode
                 },
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
+                audio: false // [FIX] Start without audio to let SpeechRecognition have exclusive access for "Action"
             };
 
             try {
@@ -2141,7 +2137,7 @@
             console.log("Initializing Speech Recognition Instance (Unified Stream)...");
             recognition = new SpeechRecognition();
             
-            // [OPTIMIZATION] Continuous mode is essential for unified stream
+            // [OPTIMIZATION] Continuous mode allows constant listening without restarting
             recognition.continuous = true; 
             recognition.lang = 'en-IN'; // [FIX] Better recognition for Indian accents
             recognition.interimResults = true;
@@ -2157,19 +2153,20 @@
 
                 console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
 
-                // [FIX] Super-responsive feedback: Pulse the indicator when hearing speech
+                // [FIX] Immediate Feedback: Scale the indicator dot
                 if (transcript.length > 0) {
-                    diIndicator.style.transform = 'scale(1.3)';
-                    setTimeout(() => diIndicator.style.transform = 'scale(1)', 100);
+                    diIndicator.style.transform = 'scale(1.5)';
+                    setTimeout(() => diIndicator.style.transform = 'scale(1)', 150);
                     updateDynamicIsland(`Heard: "${transcript}"`, isRecording ? "Say 'Thank you' to stop" : "Say 'Action' to start", isRecording ? "red" : "green");
                 }
 
                 const hasAction = /(action|start|shoot|recording)/i.test(transcript);
-                // [FIX] Even looser matching for "thank" to catch partials during recording
                 const hasStop = /(thank|thanks|cut|stop|finish|done)/i.test(transcript);
 
                 if (hasAction && !isRecording && !isCountingDown) {
                     console.log("Command Triggered: ACTION");
+                    // [IMPORTANT] Briefly abort recognition to release mic for MediaRecorder
+                    try { recognition.abort(); } catch(e) {}
                     startRecordingWithCountdown();
                 } else if (hasStop && isRecording) {
                     console.log("Command Triggered: THANK (Immediate)");
