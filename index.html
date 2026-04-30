@@ -1516,9 +1516,11 @@
 
         function handleWorkerMessage(event) {
             if (event.data.type === 'closed') {
+                isSaving = false; // [NEW] Release Lock
                 updateDynamicIsland('Success', 'Saved', 'green');
                 setTimeout(() => updateDynamicIsland('Ready'), 1500);
             } else if (event.data.type === 'error') {
+                isSaving = false; // [NEW] Release Lock on error
                 updateDynamicIsland('Error', 'Save Failed', 'red');
             }
         }
@@ -2616,54 +2618,19 @@
             }, 800);
         }
 
-        // --- MASTER AUDIO ARCHITECTURE (For Mobile Reliability) ---
-        let masterAudioContext = null;
-        let masterAudioSource = null;
-        let masterAudioDestination = null;
-        let masterAnalyzer = null;
-        let masterMicStream = null;
-
-        async function initMasterAudio() {
-            if (masterAudioContext) return;
-            
-            try {
-                masterAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
-                // Get Mic once and keep it
-                masterMicStream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
-                });
-                
-                masterAudioSource = masterAudioContext.createMediaStreamSource(masterMicStream);
-                masterAudioDestination = masterAudioContext.createMediaStreamDestination();
-                
-                masterAnalyzer = masterAudioContext.createAnalyser();
-                masterAnalyzer.fftSize = 512;
-                
-                // Route: Mic -> Analyzer -> Destination (for Recorder)
-                masterAudioSource.connect(masterAnalyzer);
-                masterAudioSource.connect(masterAudioDestination);
-                
-                console.log("Master Audio initialized and routing.");
-                
-                // Start Volume Monitoring Loop
-                startVolumeMonitor();
-            } catch (e) {
-                console.error("Master Audio failed", e);
-                updateDynamicIsland("Mic Error", "Check Settings", "red");
-            }
-        }
+        let isSaving = false;
 
         function startVolumeMonitor() {
             const bufferLength = masterAnalyzer.fftSize;
             const dataArray = new Uint8Array(bufferLength);
             
-            // [NEW] Ignore loud sounds for first 2 seconds of recording (start beeps)
             let recordingStartDelay = 0;
+            let peakCount = 0; 
 
             const check = () => {
                 if (!directorModeEnabled || !masterAnalyzer) {
                     volumeMeter.style.display = 'none';
+                    window.isMonitoringVolume = false;
                     return;
                 }
 
@@ -2676,7 +2643,6 @@
                 
                 const volumePercent = Math.floor((maxDeviation / 127) * 100);
                 
-                // Real-time UI updates
                 if (isRecording) {
                     if (recordingStartDelay === 0) recordingStartDelay = Date.now();
                     
@@ -2684,16 +2650,24 @@
                     volumeMeter.textContent = `[Mic: ${volumePercent}%]`;
                     diIndicator.style.transform = `scale(${1 + (maxDeviation / 60)})`;
                     
-                    // Sound Trigger Stop (Loud Sound / Clap)
-                    // Increased threshold from 90 to 110 (approx 85% volume)
-                    // Added 2s safety window
-                    if (maxDeviation > 110 && (Date.now() - recordingStartDelay > 2000)) { 
-                         console.log("Master Audio: Peak Triggered STOP", maxDeviation);
-                         updateDynamicIsland("STOPPED", "Sound Triggered", "orange");
-                         stopRecording();
+                    // --- REFINED TRIGGER LOGIC ---
+                    // 1. Extreme Peak (Clap/Shout): 118+ (approx 93% volume)
+                    // 2. Sharpness: Must be a short burst (peakCount remains small)
+                    if (maxDeviation > 118 && (Date.now() - recordingStartDelay > 2500)) { 
+                         peakCount++;
+                         if (peakCount >= 1 && peakCount < 8) { // Sharp burst only
+                             console.log("Master Audio: Peak Triggered STOP", maxDeviation);
+                             updateDynamicIsland("STOPPED", "Sound Triggered", "orange");
+                             stopRecording();
+                             peakCount = 0;
+                             recordingStartDelay = 0;
+                         }
+                    } else {
+                        peakCount = 0; 
                     }
                 } else {
                     recordingStartDelay = 0;
+                    peakCount = 0;
                     volumeMeter.style.display = 'none';
                     diIndicator.style.transform = `scale(1)`;
                 }
@@ -2765,6 +2739,10 @@
 
         // --- RECORDING ---
         recordContainer.onclick = async () => {
+            if (isSaving) {
+                updateDynamicIsland("Wait...", "Saving in progress", "orange");
+                return;
+            }
             if (!isRecording) {
                 // FALLBACK: If Director Mode is on, clicking button triggers the "Action" sequence
                 if (directorModeEnabled) {
@@ -2838,6 +2816,7 @@
 
         function stopRecording() {
             if (!isRecording) return;
+            isSaving = true; // [NEW] Lock
             mediaRecorder.stop();
             isRecording = false;
 
@@ -2850,7 +2829,6 @@
             recordBtnInner.classList.remove('recording');
             diTimer.textContent = '00:00';
             updateDynamicIsland("Saving..."); // Updated status
-            // Saved status handled in onstop
             clearTimeout(recordingInterval);
         }
 
