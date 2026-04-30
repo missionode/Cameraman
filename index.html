@@ -1557,7 +1557,11 @@
                     aspectRatio: { ideal: currentAspectRatio },
                     facingMode: currentFacingMode
                 },
-                audio: false // [FIX] Never hold mic in viewfinder to avoid conflict with Director Mode
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
             };
 
             try {
@@ -2138,12 +2142,11 @@
                 recognition = null;
             }
 
-            console.log("Initializing Speech Recognition Instance (Mobile Optimized)...");
+            console.log("Initializing Speech Recognition Instance (Unified Stream)...");
             recognition = new SpeechRecognition();
             
-            // [OPTIMIZATION] Non-continuous is often more robust on mobile 
-            // when sharing mic with MediaRecorder
-            recognition.continuous = false; 
+            // [OPTIMIZATION] Continuous mode is essential for unified stream
+            recognition.continuous = true; 
             recognition.lang = 'en-US';
             recognition.interimResults = true;
             recognition.maxAlternatives = 1;
@@ -2355,44 +2358,17 @@
         async function prepareMicForRecording() {
             if (!directorModeEnabled || !recognition) return;
 
-            updateDynamicIsland("Mic Swapping...");
-            isSwitchingMode = true;
-
-            return new Promise(resolve => {
-                let resolved = false;
-                const safetyTimeout = setTimeout(() => {
-                    if (!resolved) {
-                        console.warn("Speech stop timed out, forcing proceed");
-                        resolved = true;
-                        resolve();
-                    }
-                }, 1500);
-
-                // Hook one-time listener to confirm it actually stopped
-                if (recognition) {
-                    recognition.onend = () => {
-                        if (!resolved) {
-                            console.log("Speech released (onend)");
-                            clearTimeout(safetyTimeout);
-                            resolved = true;
-                            resolve();
-                        }
-                    };
-
-                    // NUCLEAR: Abort and Destroy to force OS release
-                    try {
-                        recognition.abort();
-                        recognition = null; // Mark as null immediately so we don't try to use it
-                    } catch (e) {
-                        resolve();
-                    }
-                } else {
-                    resolve();
-                }
-            });
+            // [NEW] In Unified Stream Mode, we don't swap.
+            // We keep the mic open and sharing.
+            return Promise.resolve();
         }
 
         async function getAudioStreamWithRetry(retries = 3) {
+            // [FIX] Return the existing global stream
+            if (stream && stream.getAudioTracks().length > 0) {
+                return stream;
+            }
+            
             for (let i = 0; i < retries; i++) {
                 try {
                     return await navigator.mediaDevices.getUserMedia({
@@ -2566,22 +2542,10 @@
                 isPreparingToRecord = false; // Handover complete
                 recordingStartTime = Date.now();
 
-                // [FIX] Director Mode Handover Complete - Restart Listener
-                isSwitchingMode = false;
-                if (directorModeEnabled) {
-                    setTimeout(() => {
-                        console.log("Attempting to restart Director Mic during recording...");
-                        try {
-                            if (!recognition) createSpeechRecognition();
-                            recognition.start();
-                        } catch(e) { console.warn("Could not restart director mic", e); }
-                    }, 500);
-                }
-
                 dynamicIsland.classList.add('recording');
                 diTimerContainer.classList.remove('hidden');
                 recordBtnInner.classList.add('recording');
-                updateDynamicIsland('Recording', '', 'red');
+                updateDynamicIsland('Recording', "Say 'Thank you' to stop", 'red');
                 updateTimer();
 
             } catch (e) {
