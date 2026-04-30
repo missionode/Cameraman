@@ -2698,20 +2698,21 @@
                     volumeMeter.textContent = `[Mic: ${volumePercent}%]`;
                     diIndicator.style.transform = `scale(${1 + (maxDeviation / 60)})`;
                     
-                    // --- IMPROVED TRIGGER LOGIC (Anti-Conversation) ---
-                    // 1. Threshold: 122+ (approx 96% volume - very loud)
-                    // 2. Sustained Peak: Must hold for 3 consecutive frames (approx 50ms) to filter talking
-                    if (maxDeviation > 122 && (Date.now() - recordingStartDelay > 2500)) { 
+                    // --- IMPROVED TRIGGER LOGIC (Natural Voice Support) ---
+                    // 1. Threshold: Lowered to 105+ (approx 83% volume) to trigger with a normal voice
+                    // 2. Sustained Peak: Must hold for 5 consecutive frames (approx 80ms) 
+                    // This allows for a normal 'Thank you' or 'Stop' to trigger the stop.
+                    if (maxDeviation > 105 && (Date.now() - recordingStartDelay > 2500)) { 
                          peakCount++;
-                         if (peakCount >= 3) { 
-                             console.log("Master Audio: Sustained Peak Triggered STOP", maxDeviation);
-                             updateDynamicIsland("STOPPED", "Sound Triggered", "orange");
+                         if (peakCount >= 5) { 
+                             console.log("Master Audio: Natural Stop Triggered", maxDeviation);
+                             updateDynamicIsland("STOPPED", "Stop Command Heard", "orange");
                              stopRecording();
                              peakCount = 0;
                              recordingStartDelay = 0;
                          }
                     } else {
-                        // Slowly decay count to differentiate from sustained shouting
+                        // Rapid decay to allow normal talking to pass
                         if (peakCount > 0) peakCount--; 
                     }
                 } else {
