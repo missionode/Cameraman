@@ -2056,11 +2056,9 @@
                 directorModeEnabled = e.target.checked;
                 if (directorModeEnabled) {
                     try {
-                        // 1. [NEW] Initialize Master Audio Context
-                        // This opens the mic ONCE and shares it between everything.
-                        updateDynamicIsland("Initializing Mic...");
-                        await initMasterAudio();
-
+                        // 1. [FIX] Don't init master audio yet! 
+                        // SpeechRecognition needs exclusive mic access for "Action"
+                        
                         // 2. [CHANGED] Use global save location if set, otherwise prompt IF not set
                         if (!saveDirectoryHandle) {
                              try {
@@ -2079,7 +2077,7 @@
                         }
                         
                         startListening();
-                        updateDynamicIsland("Director Mode Ready");
+                        updateDynamicIsland("Director Mode Ready", "Say 'Action' to start", "green");
                     } catch (err) {
                         console.error("Director setup error:", err);
                         e.target.checked = false;
@@ -2088,6 +2086,12 @@
                     }
                 } else {
                     stopListening();
+                    // Clean up master audio if it exists
+                    if (masterAudioContext) {
+                        try { masterAudioContext.close(); } catch(e) {}
+                        masterAudioContext = null;
+                        masterMicStream = null;
+                    }
                 }
             });
 
