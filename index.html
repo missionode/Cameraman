@@ -2128,9 +2128,12 @@
                 recognition = null;
             }
 
-            console.log("Initializing Speech Recognition Instance...");
+            console.log("Initializing Speech Recognition Instance (Mobile Optimized)...");
             recognition = new SpeechRecognition();
-            recognition.continuous = true;
+            
+            // [OPTIMIZATION] Non-continuous is often more robust on mobile 
+            // when sharing mic with MediaRecorder
+            recognition.continuous = false; 
             recognition.lang = 'en-US';
             recognition.interimResults = true;
             recognition.maxAlternatives = 1;
@@ -2138,8 +2141,6 @@
             recognition.onresult = (event) => {
                 if (!event.results) return;
                 
-                // [FIX] Iterate through results to find the latest transcript
-                // Some mobile engines behave differently with resultIndex
                 let transcript = '';
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     transcript += event.results[i][0].transcript;
@@ -2147,23 +2148,22 @@
                 transcript = transcript.trim().toLowerCase();
                 const isFinal = event.results[event.resultIndex].isFinal;
 
-                console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
+                console.log(`Director heard:`, transcript);
 
-                // Always show what we heard in the Dynamic Island for feedback
                 if (transcript.length > 0) {
                     updateDynamicIsland(`Heard: "${transcript}"`, isRecording ? "Say 'Thank you' to stop" : "Say 'Action' to start", isRecording ? "red" : "green");
                 }
 
                 const hasAction = /(action|start|shoot|recording)/i.test(transcript);
-                // [FIX] Prioritize 'Thank you' and make regex more robust for various phrasings
                 const hasStop = /(thank\s?you|thanks|cut|stop|finish)/i.test(transcript);
 
                 if (hasAction && !isRecording && !isCountingDown) {
                     console.log("Command Triggered: ACTION");
                     startRecordingWithCountdown();
                 } else if (hasStop && isRecording) {
-                    console.log("Command Triggered: THANK YOU / STOP");
-                    stopRecordingWithCountdown();
+                    console.log("Command Triggered: THANK YOU (Immediate)");
+                    // [FIX] Stop immediately for voice commands to improve responsiveness
+                    stopRecording(); 
                 }
             };
 
@@ -2183,35 +2183,22 @@
                 }
                 if (event.error !== 'no-speech' && event.error !== 'aborted') {
                     console.warn("Speech Error:", event.error);
-                    updateDynamicIsland("Mic Error", event.error, "orange");
                 }
             };
 
             recognition.onend = () => {
-                console.log("Speech Recognition: Ended");
+                console.log("Speech Recognition: Cycle Ended");
 
-                if (isSwitchingMode) {
-                    console.log("Intentional text-to-record switch. No restart.");
-                    return;
-                }
+                if (isSwitchingMode) return;
 
-                // [FIX] Allow restarting even if recording, so we can hear "Stop"
+                // [FIX] Auto-restart for "non-continuous" mode
                 if (directorModeEnabled) {
-                    const timeSinceLastEnd = Date.now() - lastSpeechEndTime;
-                    lastSpeechEndTime = Date.now();
-                    let delay = 100;
-                    if (timeSinceLastEnd < 1000) delay = 2000;
-
                     clearTimeout(speechRestartTimeout);
                     speechRestartTimeout = setTimeout(() => {
-                        // [FIX] Ensure we restart if we are in valid state (not switching)
-                        if (directorModeEnabled && recognition && !isSwitchingMode) {
-                            try {
-                                console.log("Restarting Speech...");
-                                recognition.start();
-                            } catch (e) { }
+                        if (directorModeEnabled && !isSwitchingMode) {
+                            try { recognition.start(); } catch (e) { }
                         }
-                    }, delay);
+                    }, 300); // Quick restart
                 }
             };
         }
@@ -2260,7 +2247,8 @@
         }
 
         async function stopRecordingWithCountdown() {
-            if (!isRecording) return;
+            if (!isRecording || isCountingDown) return;
+            isCountingDown = true;
 
             // Audio Context
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -2277,6 +2265,7 @@
                     playTone(600, 0.1);
                 } else {
                     clearInterval(interval);
+                    isCountingDown = false;
                     updateDynamicIsland("CUT!");
                     // Play cut sound inside stopRecording will handle the final tone
                     setTimeout(() => stopRecording(), 200);
