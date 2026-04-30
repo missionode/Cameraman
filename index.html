@@ -2516,8 +2516,17 @@
 
                 // Store audio track to stop it later
                 mediaRecorder.audioTrack = audioTrack;
-                mediaRecorder.ondataavailable = (e) => {
+                
+                let firstBlob = null;
+
+                mediaRecorder.ondataavailable = async (e) => {
                     if (e.data.size > 0) {
+                        // [FIX] For Seekability: Hold the first chunk until we have the duration
+                        if (!firstBlob && !isSecure) {
+                            firstBlob = e.data;
+                            return;
+                        }
+
                         // [OPTIMIZATION] Send chunk to worker
                         recorderWorker.postMessage({
                             type: 'write',
@@ -2527,6 +2536,18 @@
                     }
                 };
                 mediaRecorder.onstop = async () => {
+                    const duration = Date.now() - recordingStartTime;
+                    console.log("Recording Stopped. Duration:", duration, "ms");
+
+                    // [FIX] Apply seekability fix to the first blob before closing
+                    if (firstBlob) {
+                        const fixedBlob = await fixWebMDuration(firstBlob, duration);
+                        recorderWorker.postMessage({
+                            type: 'write',
+                            payload: { data: fixedBlob }
+                        });
+                    }
+
                     // [OPTIMIZATION] Tell worker to finish
                     recorderWorker.postMessage({ type: 'close' });
 
@@ -2637,6 +2658,9 @@
             const bufferLength = masterAnalyzer.fftSize;
             const dataArray = new Uint8Array(bufferLength);
             
+            // [NEW] Ignore loud sounds for first 2 seconds of recording (start beeps)
+            let recordingStartDelay = 0;
+
             const check = () => {
                 if (!directorModeEnabled || !masterAnalyzer) {
                     volumeMeter.style.display = 'none';
@@ -2654,16 +2678,22 @@
                 
                 // Real-time UI updates
                 if (isRecording) {
+                    if (recordingStartDelay === 0) recordingStartDelay = Date.now();
+                    
                     volumeMeter.style.display = 'inline';
                     volumeMeter.textContent = `[Mic: ${volumePercent}%]`;
                     diIndicator.style.transform = `scale(${1 + (maxDeviation / 60)})`;
                     
                     // Sound Trigger Stop (Loud Sound / Clap)
-                    if (maxDeviation > 90) { // Approx 70% volume
-                         console.log("Master Audio: Peak Triggered STOP");
+                    // Increased threshold from 90 to 110 (approx 85% volume)
+                    // Added 2s safety window
+                    if (maxDeviation > 110 && (Date.now() - recordingStartDelay > 2000)) { 
+                         console.log("Master Audio: Peak Triggered STOP", maxDeviation);
+                         updateDynamicIsland("STOPPED", "Sound Triggered", "orange");
                          stopRecording();
                     }
                 } else {
+                    recordingStartDelay = 0;
                     volumeMeter.style.display = 'none';
                     diIndicator.style.transform = `scale(1)`;
                 }
@@ -2674,6 +2704,42 @@
         }
 
         const volumeMeter = document.getElementById('volume-meter');
+
+        // --- VIDEO SEEKABILITY FIX (WebM EBML) ---
+        // MediaRecorder often misses duration in the header. 
+        // This helper ensures the video is seekable in most players.
+        function fixWebMDuration(blob, duration) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const buffer = reader.result;
+                    const view = new DataView(buffer);
+                    
+                    // Simple search for the Segment (0x18538067) and Info (0x1549A966)
+                    // and then Duration (0x4489)
+                    // This is a lightweight version of what libraries like ebml.js do.
+                    // If we can't find it easily, we just return the original blob.
+                    try {
+                        const uint8 = new Uint8Array(buffer);
+                        // Search for 'Duration' tag 0x44 0x89
+                        for (let i = 0; i < uint8.length - 10; i++) {
+                            if (uint8[i] === 0x44 && uint8[i+1] === 0x89) {
+                                // Found Duration tag. The next byte is the length (usually 8 bytes for float64)
+                                // We replace it with our calculated duration.
+                                const durationOffset = i + 3;
+                                const floatView = new DataView(buffer, durationOffset, 8);
+                                floatView.setFloat64(0, duration, false); // Big Endian
+                                console.log("EBML: Injected Duration into Header");
+                                break;
+                            }
+                        }
+                    } catch (e) { console.warn("EBML Fix Failed", e); }
+                    
+                    resolve(new Blob([buffer], { type: blob.type }));
+                };
+                reader.readAsArrayBuffer(blob);
+            });
+        }
 
         function updateDynamicIsland(text, subtext = '', color = 'green') {
             diStatus.textContent = text + (subtext ? ` | ${subtext}` : '');
