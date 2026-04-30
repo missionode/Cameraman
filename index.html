@@ -2698,18 +2698,21 @@
                     volumeMeter.textContent = `[Mic: ${volumePercent}%]`;
                     diIndicator.style.transform = `scale(${1 + (maxDeviation / 60)})`;
                     
-                    // --- REFINED TRIGGER LOGIC ---
-                    if (maxDeviation > 118 && (Date.now() - recordingStartDelay > 2500)) { 
+                    // --- IMPROVED TRIGGER LOGIC (Anti-Conversation) ---
+                    // 1. Threshold: 122+ (approx 96% volume - very loud)
+                    // 2. Sustained Peak: Must hold for 3 consecutive frames (approx 50ms) to filter talking
+                    if (maxDeviation > 122 && (Date.now() - recordingStartDelay > 2500)) { 
                          peakCount++;
-                         if (peakCount >= 1 && peakCount < 8) { 
-                             console.log("Master Audio: Peak Triggered STOP", maxDeviation);
+                         if (peakCount >= 3) { 
+                             console.log("Master Audio: Sustained Peak Triggered STOP", maxDeviation);
                              updateDynamicIsland("STOPPED", "Sound Triggered", "orange");
                              stopRecording();
                              peakCount = 0;
                              recordingStartDelay = 0;
                          }
                     } else {
-                        peakCount = 0; 
+                        // Slowly decay count to differentiate from sustained shouting
+                        if (peakCount > 0) peakCount--; 
                     }
                 } else {
                     recordingStartDelay = 0;
