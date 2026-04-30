@@ -639,6 +639,7 @@
                 <div class="di-content">
                     <div class="di-indicator" id="di-indicator"></div>
                     <span id="di-status" style="font-size: 13px;">Camera</span>
+                    <span id="volume-meter" style="font-size: 11px; color: #ffd700; margin-left: 4px; display: none;"></span>
                 </div>
                 <div class="di-content hidden" id="di-timer-container">
                     <span class="di-timer" id="di-timer">00:00</span>
@@ -2586,6 +2587,8 @@
 
         let audioCtxTrigger = null;
 
+        const volumeMeter = document.getElementById('volume-meter');
+
         function setupSoundTrigger(audioStream) {
             if (!directorModeEnabled) return;
             
@@ -2599,17 +2602,18 @@
 
                 const source = audioCtxTrigger.createMediaStreamSource(audioStream);
                 const analyzer = audioCtxTrigger.createAnalyser();
-                analyzer.fftSize = 1024;
+                analyzer.fftSize = 512;
                 source.connect(analyzer);
                 
                 const bufferLength = analyzer.fftSize;
                 const dataArray = new Uint8Array(bufferLength);
                 
                 const startTime = Date.now();
-                let lastTriggerTime = 0;
+                volumeMeter.style.display = 'inline';
 
                 const checkVolume = () => {
                     if (!isRecording) {
+                        volumeMeter.style.display = 'none';
                         if (audioCtxTrigger) {
                             try { audioCtxTrigger.close(); } catch(e) {}
                             audioCtxTrigger = null;
@@ -2631,22 +2635,18 @@
 
                     // --- VISUAL FEEDBACK ---
                     // Pulse the dot
-                    diIndicator.style.transform = `scale(${1 + (maxDeviation / 50)})`;
+                    diIndicator.style.transform = `scale(${1 + (maxDeviation / 60)})`;
                     
-                    // Show "Sound Level" in Dynamic Island so user can see it's working
-                    if (Date.now() % 500 < 50) { // Throttle UI text updates
-                        updateDynamicIsland("Recording", `Volume: ${volumePercent}% (Clap to stop)`, "red");
-                    }
+                    // Show "Sound Level" in dedicated element
+                    volumeMeter.textContent = `[Mic: ${volumePercent}%]`;
 
                     // --- TRIGGER LOGIC ---
-                    // Threshold: 80% volume (approx 100 deviation)
-                    if (Date.now() - startTime > 2000 && maxDeviation > 90) {
-                         if (Date.now() - lastTriggerTime > 1000) {
-                            console.log("Sound Trigger: Peak Detected!", maxDeviation);
-                            updateDynamicIsland("STOPPING...", "Loud Sound Heard", "orange");
-                            setTimeout(() => stopRecording(), 100);
-                            return; // Stop loop
-                         }
+                    // Threshold: Slightly lower for better responsiveness
+                    if (Date.now() - startTime > 1500 && maxDeviation > 85) {
+                         console.log("Sound Trigger: Peak Detected!", maxDeviation);
+                         updateDynamicIsland("STOPPED", "Sound Triggered", "orange");
+                         stopRecording();
+                         return; // Stop loop
                     }
                     
                     requestAnimationFrame(checkVolume);
