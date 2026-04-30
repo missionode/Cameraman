@@ -2591,16 +2591,22 @@
             
             try {
                 audioCtxTrigger = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // [IMPORTANT] Resume AudioContext (required for mobile)
+                if (audioCtxTrigger.state === 'suspended') {
+                    audioCtxTrigger.resume();
+                }
+
                 const source = audioCtxTrigger.createMediaStreamSource(audioStream);
                 const analyzer = audioCtxTrigger.createAnalyser();
-                analyzer.fftSize = 256;
+                analyzer.fftSize = 1024;
                 source.connect(analyzer);
                 
-                const bufferLength = analyzer.frequencyBinCount;
+                const bufferLength = analyzer.fftSize;
                 const dataArray = new Uint8Array(bufferLength);
                 
-                // Wait 1.5s before listening to avoid self-triggering from the start beep
                 const startTime = Date.now();
+                let lastTriggerTime = 0;
 
                 const checkVolume = () => {
                     if (!isRecording) {
@@ -2611,23 +2617,39 @@
                         return;
                     }
 
-                    analyzer.getByteFrequencyData(dataArray);
-                    let max = 0;
+                    // Use Time Domain for better peak detection (claps)
+                    analyzer.getByteTimeDomainData(dataArray);
+                    
+                    let maxDeviation = 0;
                     for(let i = 0; i < bufferLength; i++) {
-                        if (dataArray[i] > max) max = dataArray[i];
+                        const deviation = Math.abs(dataArray[i] - 128);
+                        if (deviation > maxDeviation) maxDeviation = deviation;
                     }
                     
-                    // Simple peak detection
-                    if (Date.now() - startTime > 1500 && max > 185) { // Threshold for loud voice/clap
-                         console.log("Sound Trigger: Stop Command Heard (Volume Peak)");
-                         stopRecording();
-                    } else {
-                        // Visual feedback: subtly pulse the red dot based on volume
-                        if (max > 50) {
-                            diIndicator.style.transform = `scale(${1 + (max/400)})`;
-                        }
-                        requestAnimationFrame(checkVolume);
+                    // maxDeviation will be 0 to 127
+                    const volumePercent = Math.floor((maxDeviation / 127) * 100);
+
+                    // --- VISUAL FEEDBACK ---
+                    // Pulse the dot
+                    diIndicator.style.transform = `scale(${1 + (maxDeviation / 50)})`;
+                    
+                    // Show "Sound Level" in Dynamic Island so user can see it's working
+                    if (Date.now() % 500 < 50) { // Throttle UI text updates
+                        updateDynamicIsland("Recording", `Volume: ${volumePercent}% (Clap to stop)`, "red");
                     }
+
+                    // --- TRIGGER LOGIC ---
+                    // Threshold: 80% volume (approx 100 deviation)
+                    if (Date.now() - startTime > 2000 && maxDeviation > 90) {
+                         if (Date.now() - lastTriggerTime > 1000) {
+                            console.log("Sound Trigger: Peak Detected!", maxDeviation);
+                            updateDynamicIsland("STOPPING...", "Loud Sound Heard", "orange");
+                            setTimeout(() => stopRecording(), 100);
+                            return; // Stop loop
+                         }
+                    }
+                    
+                    requestAnimationFrame(checkVolume);
                 };
                 checkVolume();
             } catch (e) {
