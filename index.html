@@ -2045,11 +2045,10 @@
                 directorModeEnabled = e.target.checked;
                 if (directorModeEnabled) {
                     try {
-                        // 1. [FIXED] Skip redundant mic request as startCamera already handles it
-                        // Just ensure we have a stream
-                        if (!stream) {
-                            await startCamera();
-                        }
+                        // 1. [NEW] Initialize Master Audio Context
+                        // This opens the mic ONCE and shares it between everything.
+                        updateDynamicIsland("Initializing Mic...");
+                        await initMasterAudio();
 
                         // 2. [CHANGED] Use global save location if set, otherwise prompt IF not set
                         if (!saveDirectoryHandle) {
@@ -2356,9 +2355,10 @@
         }
 
         async function getAudioStreamWithRetry(retries = 3) {
-            // [FIX] Return the existing global stream
-            if (stream && stream.getAudioTracks().length > 0) {
-                return stream;
+            // [NEW] Use Master Audio Stream if Director Mode is on
+            if (directorModeEnabled && masterAudioDestination) {
+                console.log("Using Master Audio Stream for recording.");
+                return masterAudioDestination.stream;
             }
             
             for (let i = 0; i < retries; i++) {
@@ -2487,14 +2487,8 @@
                     audioTrack
                 ]);
 
-                // [NEW] Setup Sound Trigger (Loud Voice / Clap to stop)
-                // This uses the actual audio stream track being recorded.
                 if (directorModeEnabled) {
-                    setupSoundTrigger(combinedStream);
-                }
-
-                if (directorModeEnabled) {
-                    updateDynamicIsland("Recording (Say 'Thank you' Loudly)");
+                    updateDynamicIsland('Recording', "Say 'Thank you' Loudly", 'red');
                 }
 
                 // [OPTIMIZATION] High Bitrate for Quality
@@ -2585,77 +2579,85 @@
             }, 800);
         }
 
-        let audioCtxTrigger = null;
+        // --- MASTER AUDIO ARCHITECTURE (For Mobile Reliability) ---
+        let masterAudioContext = null;
+        let masterAudioSource = null;
+        let masterAudioDestination = null;
+        let masterAnalyzer = null;
+        let masterMicStream = null;
 
-        const volumeMeter = document.getElementById('volume-meter');
-
-        function setupSoundTrigger(audioStream) {
-            if (!directorModeEnabled) return;
+        async function initMasterAudio() {
+            if (masterAudioContext) return;
             
             try {
-                audioCtxTrigger = new (window.AudioContext || window.webkitAudioContext)();
+                masterAudioContext = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // [IMPORTANT] Resume AudioContext (required for mobile)
-                if (audioCtxTrigger.state === 'suspended') {
-                    audioCtxTrigger.resume();
-                }
-
-                const source = audioCtxTrigger.createMediaStreamSource(audioStream);
-                const analyzer = audioCtxTrigger.createAnalyser();
-                analyzer.fftSize = 512;
-                source.connect(analyzer);
+                // Get Mic once and keep it
+                masterMicStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+                });
                 
-                const bufferLength = analyzer.fftSize;
-                const dataArray = new Uint8Array(bufferLength);
+                masterAudioSource = masterAudioContext.createMediaStreamSource(masterMicStream);
+                masterAudioDestination = masterAudioContext.createMediaStreamDestination();
                 
-                const startTime = Date.now();
-                volumeMeter.style.display = 'inline';
-
-                const checkVolume = () => {
-                    if (!isRecording) {
-                        volumeMeter.style.display = 'none';
-                        if (audioCtxTrigger) {
-                            try { audioCtxTrigger.close(); } catch(e) {}
-                            audioCtxTrigger = null;
-                        }
-                        return;
-                    }
-
-                    // Use Time Domain for better peak detection (claps)
-                    analyzer.getByteTimeDomainData(dataArray);
-                    
-                    let maxDeviation = 0;
-                    for(let i = 0; i < bufferLength; i++) {
-                        const deviation = Math.abs(dataArray[i] - 128);
-                        if (deviation > maxDeviation) maxDeviation = deviation;
-                    }
-                    
-                    // maxDeviation will be 0 to 127
-                    const volumePercent = Math.floor((maxDeviation / 127) * 100);
-
-                    // --- VISUAL FEEDBACK ---
-                    // Pulse the dot
-                    diIndicator.style.transform = `scale(${1 + (maxDeviation / 60)})`;
-                    
-                    // Show "Sound Level" in dedicated element
-                    volumeMeter.textContent = `[Mic: ${volumePercent}%]`;
-
-                    // --- TRIGGER LOGIC ---
-                    // Threshold: Slightly lower for better responsiveness
-                    if (Date.now() - startTime > 1500 && maxDeviation > 85) {
-                         console.log("Sound Trigger: Peak Detected!", maxDeviation);
-                         updateDynamicIsland("STOPPED", "Sound Triggered", "orange");
-                         stopRecording();
-                         return; // Stop loop
-                    }
-                    
-                    requestAnimationFrame(checkVolume);
-                };
-                checkVolume();
+                masterAnalyzer = masterAudioContext.createAnalyser();
+                masterAnalyzer.fftSize = 512;
+                
+                // Route: Mic -> Analyzer -> Destination (for Recorder)
+                masterAudioSource.connect(masterAnalyzer);
+                masterAudioSource.connect(masterAudioDestination);
+                
+                console.log("Master Audio initialized and routing.");
+                
+                // Start Volume Monitoring Loop
+                startVolumeMonitor();
             } catch (e) {
-                console.warn("Sound trigger setup failed", e);
+                console.error("Master Audio failed", e);
+                updateDynamicIsland("Mic Error", "Check Settings", "red");
             }
         }
+
+        function startVolumeMonitor() {
+            const bufferLength = masterAnalyzer.fftSize;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            const check = () => {
+                if (!directorModeEnabled || !masterAnalyzer) {
+                    volumeMeter.style.display = 'none';
+                    return;
+                }
+
+                masterAnalyzer.getByteTimeDomainData(dataArray);
+                let maxDeviation = 0;
+                for(let i = 0; i < bufferLength; i++) {
+                    const deviation = Math.abs(dataArray[i] - 128);
+                    if (deviation > maxDeviation) maxDeviation = deviation;
+                }
+                
+                const volumePercent = Math.floor((maxDeviation / 127) * 100);
+                
+                // Real-time UI updates
+                if (isRecording) {
+                    volumeMeter.style.display = 'inline';
+                    volumeMeter.textContent = `[Mic: ${volumePercent}%]`;
+                    diIndicator.style.transform = `scale(${1 + (maxDeviation / 60)})`;
+                    
+                    // Sound Trigger Stop (Loud Sound / Clap)
+                    if (maxDeviation > 90) { // Approx 70% volume
+                         console.log("Master Audio: Peak Triggered STOP");
+                         stopRecording();
+                    }
+                } else {
+                    volumeMeter.style.display = 'none';
+                    diIndicator.style.transform = `scale(1)`;
+                }
+
+                requestAnimationFrame(check);
+            };
+            check();
+        }
+
+        const volumeMeter = document.getElementById('volume-meter');
 
         function updateDynamicIsland(text, subtext = '', color = 'green') {
             diStatus.textContent = text + (subtext ? ` | ${subtext}` : '');
