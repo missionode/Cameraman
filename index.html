@@ -2622,6 +2622,52 @@
 
         let isSaving = false;
 
+        // --- MASTER AUDIO ARCHITECTURE (For Mobile Reliability) ---
+        let masterAudioContext = null;
+        let masterAudioSource = null;
+        let masterAudioDestination = null;
+        let masterAnalyzer = null;
+        let masterMicStream = null;
+
+        async function initMasterAudio() {
+            try {
+                if (!masterAudioContext) {
+                    masterAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                if (masterAudioContext.state === 'suspended') {
+                    await masterAudioContext.resume();
+                }
+
+                // If no stream exists, or it's dead, get a fresh one
+                if (!masterMicStream || masterMicStream.getTracks().some(t => t.readyState !== 'live')) {
+                    console.log("Master Audio: Initializing fresh mic stream.");
+                    masterMicStream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+                    });
+                    
+                    masterAudioSource = masterAudioContext.createMediaStreamSource(masterMicStream);
+                    masterAnalyzer = masterAudioContext.createAnalyser();
+                    masterAnalyzer.fftSize = 512;
+                    masterAudioDestination = masterAudioContext.createMediaStreamDestination();
+                    
+                    masterAudioSource.connect(masterAnalyzer);
+                    masterAudioSource.connect(masterAudioDestination);
+                }
+                
+                console.log("Master Audio ready.");
+                
+                // Start Volume Monitoring Loop (if not already running)
+                if (!window.isMonitoringVolume) {
+                    window.isMonitoringVolume = true;
+                    startVolumeMonitor();
+                }
+            } catch (e) {
+                console.error("Master Audio failed", e);
+                throw e; // Bubble up
+            }
+        }
+
         function startVolumeMonitor() {
             const bufferLength = masterAnalyzer.fftSize;
             const dataArray = new Uint8Array(bufferLength);
@@ -2653,11 +2699,9 @@
                     diIndicator.style.transform = `scale(${1 + (maxDeviation / 60)})`;
                     
                     // --- REFINED TRIGGER LOGIC ---
-                    // 1. Extreme Peak (Clap/Shout): 118+ (approx 93% volume)
-                    // 2. Sharpness: Must be a short burst (peakCount remains small)
                     if (maxDeviation > 118 && (Date.now() - recordingStartDelay > 2500)) { 
                          peakCount++;
-                         if (peakCount >= 1 && peakCount < 8) { // Sharp burst only
+                         if (peakCount >= 1 && peakCount < 8) { 
                              console.log("Master Audio: Peak Triggered STOP", maxDeviation);
                              updateDynamicIsland("STOPPED", "Sound Triggered", "orange");
                              stopRecording();
