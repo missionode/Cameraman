@@ -2486,8 +2486,14 @@
                     audioTrack
                 ]);
 
+                // [NEW] Setup Sound Trigger (Loud Voice / Clap to stop)
+                // This uses the actual audio stream track being recorded.
                 if (directorModeEnabled) {
-                    updateDynamicIsland("Recording (Tap to Stop)");
+                    setupSoundTrigger(combinedStream);
+                }
+
+                if (directorModeEnabled) {
+                    updateDynamicIsland("Recording (Say 'Thank you' Loudly)");
                 }
 
                 // [OPTIMIZATION] High Bitrate for Quality
@@ -2576,6 +2582,57 @@
                     updateDynamicIsland("Mic Restart Failed", "Check Settings", "orange");
                 }
             }, 800);
+        }
+
+        let audioCtxTrigger = null;
+
+        function setupSoundTrigger(audioStream) {
+            if (!directorModeEnabled) return;
+            
+            try {
+                audioCtxTrigger = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioCtxTrigger.createMediaStreamSource(audioStream);
+                const analyzer = audioCtxTrigger.createAnalyser();
+                analyzer.fftSize = 256;
+                source.connect(analyzer);
+                
+                const bufferLength = analyzer.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                // Wait 1.5s before listening to avoid self-triggering from the start beep
+                const startTime = Date.now();
+
+                const checkVolume = () => {
+                    if (!isRecording) {
+                        if (audioCtxTrigger) {
+                            try { audioCtxTrigger.close(); } catch(e) {}
+                            audioCtxTrigger = null;
+                        }
+                        return;
+                    }
+
+                    analyzer.getByteFrequencyData(dataArray);
+                    let max = 0;
+                    for(let i = 0; i < bufferLength; i++) {
+                        if (dataArray[i] > max) max = dataArray[i];
+                    }
+                    
+                    // Simple peak detection
+                    if (Date.now() - startTime > 1500 && max > 185) { // Threshold for loud voice/clap
+                         console.log("Sound Trigger: Stop Command Heard (Volume Peak)");
+                         stopRecording();
+                    } else {
+                        // Visual feedback: subtly pulse the red dot based on volume
+                        if (max > 50) {
+                            diIndicator.style.transform = `scale(${1 + (max/400)})`;
+                        }
+                        requestAnimationFrame(checkVolume);
+                    }
+                };
+                checkVolume();
+            } catch (e) {
+                console.warn("Sound trigger setup failed", e);
+            }
         }
 
         function updateDynamicIsland(text, subtext = '', color = 'green') {
