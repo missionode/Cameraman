@@ -1441,13 +1441,39 @@
 
                 // 3. Init Camera & Canvas
 
-                // Auto-Detect Orientation for Default
+                // [FIX] Auto-Detect Orientation & Handle Rotation
+                function handleOrientationChange() {
+                    const isPortrait = window.innerHeight > window.innerWidth;
+                    const currentVal = aspectRatioSelect.value;
+                    
+                    const landscapeVal = config.aspectRatios[0].value.toString();
+                    const portraitVal = config.aspectRatios[3].value.toString();
+
+                    if (isPortrait && currentVal === landscapeVal) {
+                        // Was landscape, now portrait
+                        currentAspectRatio = config.aspectRatios[3].value;
+                        aspectRatioSelect.value = portraitVal;
+                        startCamera();
+                    } else if (!isPortrait && currentVal === portraitVal) {
+                        // Was portrait, now landscape
+                        currentAspectRatio = config.aspectRatios[0].value;
+                        aspectRatioSelect.value = landscapeVal;
+                        startCamera();
+                    }
+                }
+
+                // Initial detection
                 if (window.innerHeight > window.innerWidth) {
                     console.log("Portrait Mode Detected");
-                    // Set to 9:16
                     currentAspectRatio = 0.5625;
                     aspectRatioSelect.value = "0.5625";
                 }
+
+                window.addEventListener('resize', () => {
+                    // Debounce rotation slightly to let viewport settle
+                    clearTimeout(window.rotationTimeout);
+                    window.rotationTimeout = setTimeout(handleOrientationChange, 300);
+                });
 
                 await startCamera();
                 requestAnimationFrame(canvasLoop);
