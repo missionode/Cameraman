@@ -1497,6 +1497,17 @@
                 setupFocusUI();
                 SecureManager.setup();
 
+                // 6. [NEW] Register Service Worker
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('./sw.js')
+                        .then(reg => {
+                            console.log('SW Registered');
+                            // [FIX] Force update check on load
+                            reg.update();
+                        })
+                        .catch(err => console.warn('SW Register Failed', err));
+                }
+
             } catch (e) {
                 console.error("Init failed:", e);
                 updateDynamicIsland("Error", "Init Failed", "red");
