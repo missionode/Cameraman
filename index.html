@@ -2143,28 +2143,30 @@
 
                 console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
 
-                if (isFinal || transcript.length > 3) {
-                    if (!isRecording || transcript.includes('thank') || transcript.includes('cut')) {
+                if (isFinal || transcript.length > 2) {
+                    if (!isRecording || transcript.includes('thank') || transcript.includes('cut') || transcript.includes('stop')) {
                         updateDynamicIsland(`Heard: "${transcript}"`);
                     }
                 }
 
-                if (isFinal) {
-                    let commandTriggered = false;
-                    // [FIX] Looser Regex to catch commands in longer sentences
-                    if ((/(action|start|shoot)/i.test(transcript)) && !isRecording) {
-                        startRecordingWithCountdown();
-                        commandTriggered = true;
-                    } else if ((/(thank\s?you|cut|stop)/i.test(transcript)) && isRecording) {
-                        stopRecordingWithCountdown();
-                        commandTriggered = true;
-                    }
+                // [IMPROVED] Check both interim and final results for commands
+                // This makes it much more responsive.
+                const hasAction = /(action|start|shoot)/i.test(transcript);
+                const hasStop = /(thank\s?you|cut|stop)/i.test(transcript);
+
+                if (hasAction && !isRecording && !isCountingDown) {
+                    console.log("Command Triggered: ACTION");
+                    startRecordingWithCountdown();
+                } else if (hasStop && isRecording) {
+                    console.log("Command Triggered: STOP");
+                    stopRecordingWithCountdown();
                 }
             };
 
             recognition.onstart = () => {
                 console.log("Speech Recognition: Started");
-                if (!isRecording) updateDynamicIsland("Mic Active - Speak Now");
+                if (!isRecording) updateDynamicIsland("Director Listening", "Speak Now", "green");
+                else updateDynamicIsland("Recording", "Say 'Cut' to stop", "red");
             };
 
             recognition.onerror = (event) => {
@@ -2176,8 +2178,8 @@
                     return;
                 }
                 if (event.error !== 'no-speech' && event.error !== 'aborted') {
-                    // updateDynamicIsland(`Mic Error: ${event.error}`, '', 'orange');
                     console.warn("Speech Error:", event.error);
+                    updateDynamicIsland("Mic Error", event.error, "orange");
                 }
             };
 
