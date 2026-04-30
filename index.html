@@ -2485,17 +2485,19 @@
                     payload: workerPayload
                 });
 
-                // 2. [FIX] Request Audio Stream with RETRY
+                // 2. [FIX] Get/Setup Audio Stream
                 let audioStream;
-                try {
-                    audioStream = await getAudioStreamWithRetry();
-                } catch (err) {
-                    throw new Error("Mic Busy: " + err.message);
-                }
-
-                // [NEW] Setup Master Audio for Volume Analysis during recording
                 if (directorModeEnabled) {
-                    await initMasterAudio(audioStream);
+                    // Initialize Master Audio FIRST to get the shared stream
+                    await initMasterAudio();
+                    audioStream = masterMicStream;
+                    console.log("Using Master Audio Stream for recording.");
+                } else {
+                    try {
+                        audioStream = await getAudioStreamWithRetry();
+                    } catch (err) {
+                        throw new Error("Mic Busy: " + err.message);
+                    }
                 }
 
                 // 3. Combine with Video
