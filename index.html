@@ -2048,14 +2048,10 @@
                 directorModeEnabled = e.target.checked;
                 if (directorModeEnabled) {
                     try {
-                        // 1. Request Microphone Permission Explicitly
-                        try {
-                            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                            stream.getTracks().forEach(track => track.stop());
-                        } catch (micErr) {
-                            console.error("Microphone denied", micErr);
-                            alert("Microphone access is required for Voice Commands. Please allow it.");
-                            throw micErr;
+                        // 1. [FIXED] Skip redundant mic request as startCamera already handles it
+                        // Just ensure we have a stream
+                        if (!stream) {
+                            await startCamera();
                         }
 
                         // 2. [CHANGED] Use global save location if set, otherwise prompt IF not set
@@ -2147,21 +2143,19 @@
             
             // [OPTIMIZATION] Continuous mode is essential for unified stream
             recognition.continuous = true; 
-            recognition.lang = 'en-US';
+            recognition.lang = 'en-IN'; // [FIX] Better recognition for Indian accents
             recognition.interimResults = true;
             recognition.maxAlternatives = 1;
 
             recognition.onresult = (event) => {
                 if (!event.results) return;
                 
-                let transcript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    transcript += event.results[i][0].transcript;
-                }
-                transcript = transcript.trim().toLowerCase();
-                const isFinal = event.results[event.resultIndex].isFinal;
+                // [FIX] In continuous mode, look at the most recent result segment
+                const latestResult = event.results[event.results.length - 1];
+                const transcript = latestResult[0].transcript.trim().toLowerCase();
+                const isFinal = latestResult.isFinal;
 
-                console.log(`Director heard:`, transcript);
+                console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
 
                 // [FIX] Super-responsive feedback: Pulse the indicator when hearing speech
                 if (transcript.length > 0) {
