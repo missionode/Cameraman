@@ -1547,7 +1547,7 @@
                     aspectRatio: { ideal: currentAspectRatio },
                     facingMode: currentFacingMode
                 },
-                audio: capabilities.audio
+                audio: false // [FIX] Never hold mic in viewfinder to avoid conflict with Director Mode
             };
 
             try {
@@ -2137,22 +2137,25 @@
 
             recognition.onresult = (event) => {
                 if (!event.results) return;
-                const result = event.results[event.resultIndex];
-                const transcript = result[0].transcript.trim().toLowerCase();
-                const isFinal = result.isFinal;
+                
+                // [FIX] Iterate through results to find the latest transcript
+                // Some mobile engines behave differently with resultIndex
+                let transcript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    transcript += event.results[i][0].transcript;
+                }
+                transcript = transcript.trim().toLowerCase();
+                const isFinal = event.results[event.resultIndex].isFinal;
 
                 console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
 
-                if (isFinal || transcript.length > 2) {
-                    if (!isRecording || transcript.includes('thank') || transcript.includes('cut') || transcript.includes('stop')) {
-                        updateDynamicIsland(`Heard: "${transcript}"`);
-                    }
+                // Always show what we heard in the Dynamic Island for feedback
+                if (transcript.length > 0) {
+                    updateDynamicIsland(`Heard: "${transcript}"`, isRecording ? "Say 'Cut' to stop" : "Say 'Action' to start", isRecording ? "red" : "green");
                 }
 
-                // [IMPROVED] Check both interim and final results for commands
-                // This makes it much more responsive.
-                const hasAction = /(action|start|shoot)/i.test(transcript);
-                const hasStop = /(thank\s?you|cut|stop)/i.test(transcript);
+                const hasAction = /(action|start|shoot|recording)/i.test(transcript);
+                const hasStop = /(thank\s?you|cut|stop|finish)/i.test(transcript);
 
                 if (hasAction && !isRecording && !isCountingDown) {
                     console.log("Command Triggered: ACTION");
