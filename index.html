@@ -2149,30 +2149,29 @@
                 recognition = null;
             }
 
-            console.log("Initializing Speech Recognition Instance (Unified Stream)...");
+            console.log("Initializing Speech Recognition Instance (Responsive Mode)...");
             recognition = new SpeechRecognition();
             
-            // [OPTIMIZATION] Continuous mode allows constant listening without restarting
-            recognition.continuous = true; 
-            recognition.lang = 'en-IN'; // [FIX] Better recognition for Indian accents
+            // [OPTIMIZATION] Non-continuous is much more responsive for the first "Action" command
+            recognition.continuous = false; 
+            recognition.lang = 'en-IN'; 
             recognition.interimResults = true;
             recognition.maxAlternatives = 1;
 
             recognition.onresult = (event) => {
                 if (!event.results) return;
                 
-                // [FIX] In continuous mode, look at the most recent result segment
                 const latestResult = event.results[event.results.length - 1];
                 const transcript = latestResult[0].transcript.trim().toLowerCase();
                 const isFinal = latestResult.isFinal;
 
-                console.log(`Director heard (${isFinal ? 'Final' : 'Interim'}):`, transcript);
+                console.log(`Director heard: "${transcript}" (${isFinal ? 'Final' : 'Interim'})`);
 
-                // [FIX] Immediate Feedback: Scale the indicator dot
+                // [FIX] Immediate Feedback: Jump the dot and show text
                 if (transcript.length > 0) {
-                    diIndicator.style.transform = 'scale(1.5)';
-                    setTimeout(() => diIndicator.style.transform = 'scale(1)', 150);
-                    updateDynamicIsland(`Heard: "${transcript}"`, isRecording ? "Say 'Thank you' to stop" : "Say 'Action' to start", isRecording ? "red" : "green");
+                    diIndicator.style.transform = 'scale(1.6)';
+                    setTimeout(() => diIndicator.style.transform = 'scale(1)', 100);
+                    updateDynamicIsland(`Heard: "${transcript}"`, isRecording ? "Say 'Thank you' loudly" : "Say 'Action' to start", isRecording ? "red" : "green");
                 }
 
                 const hasAction = /(action|start|shoot|recording)/i.test(transcript);
@@ -2180,7 +2179,7 @@
 
                 if (hasAction && !isRecording && !isCountingDown) {
                     console.log("Command Triggered: ACTION");
-                    // [IMPORTANT] Briefly abort recognition to release mic for MediaRecorder
+                    // Stop recognition immediately to free mic for MediaRecorder
                     try { recognition.abort(); } catch(e) {}
                     startRecordingWithCountdown();
                 } else if (hasStop && isRecording) {
@@ -2189,47 +2188,44 @@
                 }
             };
 
-            recognition.onstart = () => {
-                console.log("Speech Recognition: Started");
-                if (!isRecording) updateDynamicIsland("Director Listening", "Speak Now", "green");
-                else updateDynamicIsland("Recording", "Say 'Thank you' to stop", "red");
-                
-                // Visual Pulse to show mic is active
+            recognition.onsoundstart = () => {
+                console.log("Mic: Sound detected");
                 diIndicator.classList.add('pulse');
+                if (!isRecording) updateDynamicIsland("Listening...", "Speak Now", "green");
+            };
+
+            recognition.onspeechstart = () => {
+                console.log("Mic: Speech detected");
+                diIndicator.style.background = "#fff"; // Flash white when speech begins
+                setTimeout(() => { diIndicator.style.background = isRecording ? "#ff3b30" : "#4cd964"; }, 200);
+            };
+
+            recognition.onstart = () => {
+                console.log("Speech Recognition: Session Started");
+                diIndicator.classList.remove('pulse');
+                if (!isRecording) updateDynamicIsland("Director Listening", "Say 'Action'", "green");
             };
 
             recognition.onerror = (event) => {
                 diIndicator.classList.remove('pulse');
-                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                    console.error("Speech Permission Denied or Service Blocked:", event.error);
-                    // If it's blocked during recording, it's a hardware limitation
-                    if (isRecording) {
-                        updateDynamicIsland("Mic Conflict", "Voice Stop Disabled", "orange");
-                    } else {
-                        directorModeEnabled = false;
-                        document.getElementById('director-mode-toggle').checked = false;
-                        updateDynamicIsland("Mic Denied", "Director Mode Off", "red");
-                    }
-                    return;
-                }
-                if (event.error !== 'no-speech' && event.error !== 'aborted') {
-                    console.warn("Speech Error:", event.error);
+                console.warn("Speech Error:", event.error);
+                if (event.error === 'not-allowed') {
+                    updateDynamicIsland("Mic Denied", "Check Permissions", "red");
                 }
             };
 
             recognition.onend = () => {
-                console.log("Speech Recognition: Cycle Ended");
+                console.log("Speech Recognition: Session Ended");
                 diIndicator.classList.remove('pulse');
 
                 if (isSwitchingMode) return;
 
-                if (directorModeEnabled) {
+                // Auto-restart for "Action" phase if not recording
+                if (directorModeEnabled && !isRecording && !isCountingDown) {
                     clearTimeout(speechRestartTimeout);
                     speechRestartTimeout = setTimeout(() => {
-                        if (directorModeEnabled && !isSwitchingMode) {
-                            try { recognition.start(); } catch (e) { }
-                        }
-                    }, 500); 
+                        try { recognition.start(); } catch (e) { }
+                    }, 400); 
                 }
             };
         }
@@ -2495,6 +2491,11 @@
                     throw new Error("Mic Busy: " + err.message);
                 }
 
+                // [NEW] Setup Master Audio for Volume Analysis during recording
+                if (directorModeEnabled) {
+                    await initMasterAudio(audioStream);
+                }
+
                 // 3. Combine with Video
                 const audioTrack = audioStream.getAudioTracks()[0];
                 const combinedStream = new MediaStream([
@@ -2676,7 +2677,24 @@
 
         function updateDynamicIsland(text, subtext = '', color = 'green') {
             diStatus.textContent = text + (subtext ? ` | ${subtext}` : '');
-            diIndicator.style.background = color === 'red' ? '#ff3b30' : '#4cd964';
+            
+            // Set Color
+            const colors = {
+                'green': '#4cd964',
+                'red': '#ff3b30',
+                'orange': '#ff9500',
+                'white': '#ffffff'
+            };
+            diIndicator.style.background = colors[color] || colors.green;
+            
+            // Glow effect for Recording or Hearing
+            if (color === 'red') {
+                diIndicator.style.boxShadow = '0 0 12px rgba(255, 59, 48, 0.8)';
+            } else if (color === 'white') {
+                diIndicator.style.boxShadow = '0 0 15px rgba(255, 255, 255, 0.9)';
+            } else {
+                diIndicator.style.boxShadow = 'none';
+            }
         }
 
         // --- RECORDING ---
