@@ -2151,17 +2151,18 @@
 
                 // Always show what we heard in the Dynamic Island for feedback
                 if (transcript.length > 0) {
-                    updateDynamicIsland(`Heard: "${transcript}"`, isRecording ? "Say 'Cut' to stop" : "Say 'Action' to start", isRecording ? "red" : "green");
+                    updateDynamicIsland(`Heard: "${transcript}"`, isRecording ? "Say 'Thank you' to stop" : "Say 'Action' to start", isRecording ? "red" : "green");
                 }
 
                 const hasAction = /(action|start|shoot|recording)/i.test(transcript);
-                const hasStop = /(thank\s?you|cut|stop|finish)/i.test(transcript);
+                // [FIX] Prioritize 'Thank you' and make regex more robust for various phrasings
+                const hasStop = /(thank\s?you|thanks|cut|stop|finish)/i.test(transcript);
 
                 if (hasAction && !isRecording && !isCountingDown) {
                     console.log("Command Triggered: ACTION");
                     startRecordingWithCountdown();
                 } else if (hasStop && isRecording) {
-                    console.log("Command Triggered: STOP");
+                    console.log("Command Triggered: THANK YOU / STOP");
                     stopRecordingWithCountdown();
                 }
             };
@@ -2169,7 +2170,7 @@
             recognition.onstart = () => {
                 console.log("Speech Recognition: Started");
                 if (!isRecording) updateDynamicIsland("Director Listening", "Speak Now", "green");
-                else updateDynamicIsland("Recording", "Say 'Cut' to stop", "red");
+                else updateDynamicIsland("Recording", "Say 'Thank you' to stop", "red");
             };
 
             recognition.onerror = (event) => {
@@ -2590,15 +2591,25 @@
         function restoreMicAfterRecording() {
             if (!directorModeEnabled) return;
 
+            console.log("Forcing clean Director Mic reset...");
             isSwitchingMode = false;
-            // Re-create instance to be safe
+            
+            // [FIX] Completely destroy and rebuild to ensure second command works
+            if (recognition) {
+                try { recognition.abort(); } catch(e) {}
+                recognition = null;
+            }
+
             setTimeout(() => {
                 try {
                     createSpeechRecognition();
                     recognition.start();
                     updateDynamicIsland("Director Mode Ready");
-                } catch (e) { console.warn("Restart director failed", e); }
-            }, 500);
+                } catch (e) { 
+                    console.warn("Restart director failed", e); 
+                    updateDynamicIsland("Mic Restart Failed", "Check Settings", "orange");
+                }
+            }, 800);
         }
 
         function updateDynamicIsland(text, subtext = '', color = 'green') {
