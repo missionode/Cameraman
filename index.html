@@ -1426,13 +1426,14 @@
                 } catch (e) { console.warn("Failed to restore folder", e); }
 
                 // 2. Init Workers
-                // [FIX] Use version query to bust cache for secure mode update
-                recorderWorker = new Worker('recorder.worker.js?v=5');
+                // [FIX] Use version query to bust cache
+                const v = Date.now();
+                recorderWorker = new Worker(`recorder.worker.js?v=${v}`);
                 recorderWorker.onmessage = handleWorkerMessage;
 
                 // [NEW] Init AI Offscreen Canvas for Downscaling
                 if (typeof OffscreenCanvas !== 'undefined') {
-                    aiCanvas = new OffscreenCanvas(320, 240); // Initial size, will adjust
+                    aiCanvas = new OffscreenCanvas(320, 240); 
                 } else {
                     aiCanvas = document.createElement('canvas');
                     aiCanvas.width = 320;
@@ -1441,14 +1442,12 @@
                 aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
 
                 // [NEW] Init Video Processor
-                videoProcessorWorker = new Worker('video-processor.worker.js');
+                videoProcessorWorker = new Worker(`video-processor.worker.js?v=${v}`);
                 const offscreen = canvasOutput.transferControlToOffscreen();
                 videoProcessorWorker.postMessage({ type: 'init', payload: { canvas: offscreen } }, [offscreen]);
 
                 // [FIX] Use V2 filename to bypass broken cache
-                aiWorker = new Worker('ai-v2.worker.js');
-                aiWorker.onmessage = handleAIResult;
-                aiWorker.postMessage({ type: 'init' });
+                aiWorker = new Worker(`ai-v2.worker.js?v=${v}`);
 
                 // 3. Init Camera & Canvas
 
