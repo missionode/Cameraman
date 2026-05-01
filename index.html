@@ -2508,8 +2508,26 @@
                 ]);
 
                 if (directorModeEnabled) {
-                    updateDynamicIsland('Recording', "Say 'Thank you' Loudly", 'red');
+                    updateDynamicIsland('Recording', "Loudly say 'Thank you' to stop", 'red');
+                    // Hide UI components in Secure/Director Mode
+                    document.getElementById('capture').style.display = 'none';
+                    document.getElementById('handbook-btn').style.display = 'none';
                 }
+
+                // --- [NEW] Touch-to-Focus ---
+                video.addEventListener('touchstart', async (e) => {
+                    const track = video.srcObject.getVideoTracks()[0];
+                    if (!track) return;
+                    const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+                    if (capabilities.focusMode && capabilities.focusMode.includes('manual')) {
+                        try {
+                            await track.applyConstraints({
+                                advanced: [{ focusMode: 'manual' }]
+                            });
+                            console.log("Focus: Manual Mode set.");
+                        } catch (err) { console.warn("Focus failed", err); }
+                    }
+                });
 
                 // [OPTIMIZATION] High Bitrate for Quality
                 let bitrate = 10000000; // Default 10Mbps
@@ -2545,6 +2563,10 @@
                     if (mediaRecorder.audioTrack) {
                         mediaRecorder.audioTrack.stop();
                     }
+
+                    // [FIX] Restore UI
+                    document.getElementById('capture').style.display = 'flex';
+                    document.getElementById('handbook-btn').style.display = 'flex';
 
                     // [FIX] Restore Director Mode if needed
                     restoreMicAfterRecording();
@@ -2629,7 +2651,13 @@
                 if (!masterMicStream || masterMicStream.getTracks().some(t => t.readyState !== 'live')) {
                     console.log("Master Audio: Initializing fresh mic stream.");
                     masterMicStream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+                        audio: { 
+                            echoCancellation: true, 
+                            noiseSuppression: true, 
+                            autoGainControl: true,
+                            sampleRate: 44100,
+                            channelCount: 1
+                        } 
                     });
                     
                     masterAudioSource = masterAudioContext.createMediaStreamSource(masterMicStream);
