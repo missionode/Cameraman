@@ -2539,13 +2539,8 @@
                 // Store audio track to stop it later
                 mediaRecorder.audioTrack = audioTrack;
                 
-                let firstBlob = null; // Staged for potential removal if unnecessary
-
                 mediaRecorder.ondataavailable = async (e) => {
                     if (e.data.size > 0) {
-                        // [FIX] Process EVERY chunk immediately. 
-                        // Holding the first blob was causing corruption because it didn't
-                        // contain the full file structure.
                         recorderWorker.postMessage({
                             type: 'write',
                             payload: { data: e.data }
