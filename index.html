@@ -2079,6 +2079,7 @@
                         
                         startListening();
                         updateDynamicIsland("Director Mode Ready", "Say 'Action' to start", "green");
+                        settingsModal.classList.remove('active');
                     } catch (err) {
                         console.error("Director setup error:", err);
                         e.target.checked = false;
