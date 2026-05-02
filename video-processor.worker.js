@@ -5,6 +5,12 @@ let canvas = null;
 let ctx = null;
 
 const gradingDefinitions = {
+    'hallucination': [
+        { mode: 'difference', color: 'rgba(255, 0, 255, 0.4)' }, 
+        { mode: 'exclusion', color: 'rgba(0, 255, 255, 0.3)' }, 
+        { mode: 'hue', color: 'rgba(255, 255, 0, 0.5)' },
+        { mode: 'screen', gradient: { stops: [[0, 'rgba(255,0,0,0.2)'], [0.5, 'rgba(0,255,0,0.2)'], [1, 'rgba(0,0,255,0.2)']], type: 'linear' } }
+    ],
     'noir': [{ mode: 'saturation', color: '#3f3e3e5a' }, { mode: 'overlay', color: 'rgba(0,0,0,0.4)' }, { mode: 'multiply', color: 'rgba(0,0,0,0.2)' }],
     'vintage': [{ mode: 'color', color: 'rgba(112, 66, 20, 0.32)' }, { mode: 'soft-light', color: 'rgba(255, 240, 200, 0.3)' }, { mode: 'multiply', color: 'rgba(255, 255, 255, 0.1)' }],
     'bleach-bypass': [{ mode: 'saturation', color: '#55555586' }, { mode: 'overlay', color: 'rgba(255,255,255,0.3)' }, { mode: 'multiply', color: 'rgba(0,0,0,0.3)' }],
