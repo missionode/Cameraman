@@ -1373,11 +1373,6 @@
         let aiCanvas = null;
         let aiCtx = null;
 
-        // State for smooth tracking
-        let smoothCentroidX = 0.5;
-        let smoothCentroidY = 0.5;
-        let smoothFaceWidth = 0.5;
-
         // --- PERSISTENCE HELPERS ---
         async function saveHandleToDB(handle) {
             const db = await openDB();
@@ -1698,9 +1693,11 @@
             const dt = Math.min((now - lastRenderTime) / 1000, 0.1);
             lastRenderTime = now;
 
-            // Parameters
-            const smoothTime = 0.25; // Time to reach target (approx) - Higher = Slower/Heavier
-            const maxSpeed = 2.0;    // Max velocity in normalized units/sec
+            // [IMPROVED] Adaptive Cinematic Smoothing
+            // Slower in Movie Mode for "Handheld Cinema" feel. 
+            // Faster in standard mode for "Center Stage" snap.
+            const smoothTime = movieModeEnabled ? 0.45 : 0.3; 
+            const maxSpeed = movieModeEnabled ? 1.5 : 2.5; 
 
             // Update X
             const resX = smoothDamp(currentCrop.x, targetCrop.x, cropVelocity.x, smoothTime, maxSpeed, dt);
@@ -1799,23 +1796,16 @@
 
             if (detections && detections.length > 0) {
                 // [FIX] Recalculate AI Input Dimensions to normalize coordinates correctly
-                // MediaPipe returns pixels relative to the downscaled image (320px width)
                 const aiInputWidth = 320;
                 const aiInputHeight = Math.floor(aiInputWidth * video.videoHeight / video.videoWidth);
 
-                // 1. Calculate Group Boundaries (Face Only)
-                let totalX = 0, totalY = 0;
-                let minX = 1, maxX = 0;
-                let minY = 1, maxY = 0;
+                // 1. Calculate Group Bounding Box & Lead Face
+                let minX = 1, maxX = 0, minY = 1, maxY = 0;
+                let largestFaceArea = 0;
+                let leadFaceX = 0.5, leadFaceY = 0.5;
 
                 detections.forEach(d => {
                     const b = d.boundingBox;
-                    // Normalize using AI Input Dimensions, NOT Video Dimensions
-                    const cx = (b.originX + b.width / 2) / aiInputWidth;
-                    const cy = (b.originY + b.height / 2) / aiInputHeight;
-                    totalX += cx;
-                    totalY += cy;
-
                     const nx = b.originX / aiInputWidth;
                     const nw = b.width / aiInputWidth;
                     const ny = b.originY / aiInputHeight;
@@ -1825,114 +1815,92 @@
                     if (nx + nw > maxX) maxX = nx + nw;
                     if (ny < minY) minY = ny;
                     if (ny + nh > maxY) maxY = ny + nh;
+
+                    const area = nw * nh;
+                    if (area > largestFaceArea) {
+                        largestFaceArea = area;
+                        leadFaceX = nx + nw / 2;
+                        leadFaceY = ny + nh / 2;
+                    }
                 });
 
-                const rawCentroidX = totalX / detections.length;
-                const rawCentroidY = totalY / detections.length;
-                const rawFaceWidth = maxX - minX;
-                const rawFaceHeight = maxY - minY;
+                const groupWidth = maxX - minX;
+                const groupHeight = maxY - minY;
+                const groupCenterX = minX + groupWidth / 2;
 
-                // [NEW] Virtual Body Inference
-                // Since we only detect faces, we estimate the body size to frame naturally.
-                // Shoulders: ~2.5x Face Width | Torso: ~2.0x Face Height downwards
-                const virtualBodyWidth = rawFaceWidth * 2.5; 
-                const virtualBodyHeight = rawFaceHeight * 2.0;
+                // 2. Dynamic Centroid (Weight towards Lead Face if group is sparse)
+                const groupSpread = groupWidth;
+                const leadWeight = Math.max(0, 1.0 - groupSpread * 2.0); 
+                const targetCentroidX = groupCenterX * (1 - leadWeight) + leadFaceX * leadWeight;
 
-                // Expand boundaries to include "Virtual Body"
-                const bodyMinX = rawCentroidX - virtualBodyWidth / 2;
-                const bodyMaxX = rawCentroidX + virtualBodyWidth / 2;
-                const bodyMaxY = maxY + virtualBodyHeight; // Extend downwards only
-                // Keep Top (minY) tight to head + small buffer
-
-                // [IMPROVED] Hysteresis / Deadzone
-                const deadzone = 0.02; 
-                if (Math.abs(rawCentroidX - smoothCentroidX) > deadzone) {
-                    smoothCentroidX += (rawCentroidX - smoothCentroidX) * 0.15;
-                }
-                if (Math.abs(rawCentroidY - smoothCentroidY) > deadzone) {
-                    smoothCentroidY += (rawCentroidY - smoothCentroidY) * 0.15;
-                }
-                if (Math.abs(rawFaceWidth - smoothFaceWidth) > 0.05) {
-                    smoothFaceWidth += (rawFaceWidth - smoothFaceWidth) * 0.15;
-                }
-
-                // 2. Calculate Ideal Zoom (Crop Size)
-                let desiredCropWidth;
-
-                // A. Heuristic Zoom (Standard Framing)
-                // [IMPROVED] Zoom Cap: Don't go tighter than 70% (0.7) of sensor width
-                // This prevents "claustrophobic" close-ups on standard webcams.
-                const MIN_CROP_WIDTH = 0.7; 
-
-                if (movieModeEnabled) {
-                    desiredCropWidth = Math.min(1.0, smoothFaceWidth * 6.0);
-                    desiredCropWidth = Math.max(MIN_CROP_WIDTH, desiredCropWidth);
-                } else {
-                    desiredCropWidth = Math.min(1.0, smoothFaceWidth * 3.5);
-                    desiredCropWidth = Math.max(MIN_CROP_WIDTH, desiredCropWidth);
-                }
-
-                // B. [CRITICAL] Fit-to-Subject Guarantee (Using Virtual Body)
-                // Calculate minimum dimensions needed to hold the EXTENDED body box + Safety Buffer
-                const bufferX = rawFaceWidth * 0.20; 
-                const bufferY = rawFaceHeight * 0.20;
-                
-                // Check against Virtual Body Boundaries
-                const requiredWidth = (bodyMaxX - bodyMinX) + bufferX;
-                
-                // For height, we want Head to (Head + Torso)
-                const requiredHeight = (bodyMaxY - minY) + bufferY;
-
-                // Apply Aspect Ratio Constraints to find minimum safe 'w'
+                // 3. Zoom Calculation (Apple-style Inhale/Exhale)
                 const screenAspect = video.videoWidth / video.videoHeight;
                 const ratioMultiplier = currentAspectRatio / screenAspect;
 
-                // If we set width = W, then height = W / ratioMultiplier.
-                // We need: W >= requiredWidth  AND  W / ratioMultiplier >= requiredHeight
-                const safeW_for_width = requiredWidth;
-                const safeW_for_height = requiredHeight * ratioMultiplier;
-                const minSafeW = Math.max(safeW_for_width, safeW_for_height);
-
-                // Force zoom out if heuristic is too tight
-                let w = Math.max(desiredCropWidth, minSafeW);
+                // Margins: dynamic based on group size
+                const isGroup = detections.length > 1;
+                const paddingFactor = isGroup ? 1.8 : 2.2; // Extra room for groups
                 
-                // Cap at 1.0 (Sensor Limit)
-                if (w > 1.0) w = 1.0;
+                // Headroom & Torso (Rule of Thirds)
+                const torsoPadding = isGroup ? 2.0 : 3.0; // Show more body for individuals
 
-                // Calculate resulting H
+                const reqW = groupWidth * paddingFactor + 0.1; // Base padding
+                const reqH = groupHeight * (1.0 + torsoPadding);
+
+                // Min Zoom Limit: Don't pixelate too much
+                const MIN_CROP_WIDTH = movieModeEnabled ? 0.45 : 0.6;
+                
+                let w = Math.max(reqW, reqH * ratioMultiplier, MIN_CROP_WIDTH);
+                w = Math.min(1.0, w);
                 let h = w / ratioMultiplier;
 
-                // Handle case where H exceeds sensor (1.0) due to aspect ratio mismatch
-                if (h > 1.0) { 
-                    h = 1.0; 
-                    w = h * ratioMultiplier; 
+                if (h > 1.0) {
+                    h = 1.0;
+                    w = h * ratioMultiplier;
                 }
 
-                // 3. Position the Crop (Cinematic)
-                let x = smoothCentroidX - w / 2;
-                
-                // [IMPROVED] Headroom: Place eyes at top 42% instead of 50% (Center)
-                // This mimics the "Rule of Thirds" vertical placement for interviews
-                let y = smoothCentroidY - (h * 0.42);
+                // 4. Position with Dynamic Headroom
+                // Place head top (minY) at a comfortable offset from top of crop
+                const headroom = h * (isGroup ? 0.15 : 0.12); // Tighter headroom for individuals
+                let x = targetCentroidX - w / 2;
+                let y = minY - headroom;
 
-                // [IMPROVED] Deadzone: Ignore tiny movements (< 1.5%) to lock shot
-                if (targetCrop && Math.abs(x - targetCrop.x) < 0.015 && Math.abs(y - targetCrop.y) < 0.015) {
-                    x = targetCrop.x;
-                    y = targetCrop.y;
+                // 5. Hysteresis (Anti-Jitter Lock)
+                const deadzone = 0.012; 
+                if (targetCrop && 
+                    Math.abs(x - targetCrop.x) < deadzone && 
+                    Math.abs(y - targetCrop.y) < deadzone && 
+                    Math.abs(w - targetCrop.width) < deadzone) {
+                    return; // Hold the shot
                 }
 
-                // [OPTIMIZATION] Safety Clamp (Viewport Protection)
-                // 3. Final Hard Clamp to Sensor Bounds
+                // Final Clamp to Sensor
                 x = Math.max(0, Math.min(1 - w, x));
                 y = Math.max(0, Math.min(1 - h, y));
 
                 targetCrop = { x, y, width: w, height: h };
 
             } else {
-                 // No Face? Slowly drift back to wide shot
-                 if (targetCrop) {
-                    targetCrop.x += ( (1-targetCrop.width)/2 - targetCrop.x ) * 0.02;
-                    targetCrop.y += ( (1-targetCrop.height)/2 - targetCrop.y ) * 0.02;
+                 // No Face? Slowly exhale to wide
+                 if (targetCrop && targetCrop.width < 0.99) {
+                    const centerX = (1 - targetCrop.width) / 2;
+                    const centerY = (1 - targetCrop.height) / 2;
+                    
+                    targetCrop = {
+                        x: targetCrop.x + (centerX - targetCrop.x) * 0.02,
+                        y: targetCrop.y + (centerY - targetCrop.y) * 0.02,
+                        width: targetCrop.width + (1.0 - targetCrop.width) * 0.01,
+                        height: 0 // recalculated below
+                    };
+                    
+                    const screenAspect = video.videoWidth / video.videoHeight;
+                    const ratioMultiplier = currentAspectRatio / screenAspect;
+                    targetCrop.height = targetCrop.width / ratioMultiplier;
+                    
+                    if (targetCrop.height > 1.0) {
+                        targetCrop.height = 1.0;
+                        targetCrop.width = targetCrop.height * ratioMultiplier;
+                    }
                  }
             }
         }
