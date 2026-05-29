@@ -861,28 +861,18 @@
                     
                     <label style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.4); margin-bottom: 6px; display:block; letter-spacing: 0.05em;">MASTER KEY (PUBLIC)</label>
                     <div style="position: relative; margin-bottom: 20px;">
-                        <input type="password" id="sec-master-key" autocomplete="new-password" placeholder="Public Password" style="width: 100%; padding: 12px; padding-right: 80px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 12px; outline: none; font-size: 16px;">
-                        <div style="position: absolute; right: 0; top: 0; height: 100%; display: flex; align-items: center;">
-                            <button type="button" id="biometric-master-btn" title="Biometric Unlock" style="background: none; border: none; color: var(--accent-color); cursor: pointer; padding: 10px; opacity: 0.6; transition: opacity 0.2s;">
-                                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A10.003 10.003 0 0012 3m0 0c.533 0 1.058.041 1.57.121m0 0a10.002 10.002 0 018.159 12.073m-7.5 4.806A9.992 9.992 0 0112 21c-1.83 0-3.52-.49-4.973-1.348m3.473-1.152a5.196 5.196 0 005.196-5.196v-1.127m-10.392 0v1.127a5.196 5.196 0 002.598 4.5m10.392-4.5c0-1.435-.581-2.735-1.523-3.677M12 8V7m0 1v1"></path></svg>
-                            </button>
-                            <button type="button" class="password-toggle" data-target="sec-master-key" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; height: 44px; width: 44px; display: flex; align-items: center; justify-content: center;">
-                                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                            </button>
-                        </div>
+                        <input type="password" id="sec-master-key" readonly placeholder="Click to Scan Fingerprint" style="width: 100%; padding: 12px; padding-right: 40px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 12px; outline: none; font-size: 16px; cursor: pointer;">
+                        <button type="button" class="password-toggle" data-target="sec-master-key" style="position: absolute; right: 0; top: 0; height: 100%; width: 44px; background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
                     </div>
 
                     <label style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.4); margin-bottom: 6px; display:block; letter-spacing: 0.05em;">SECURE KEY (PRIVATE)</label>
                     <div style="position: relative; margin-bottom: 32px;">
-                        <input type="password" id="sec-private-key" autocomplete="new-password" placeholder="Private Password" style="width: 100%; padding: 12px; padding-right: 80px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 12px; outline: none; font-size: 16px;">
-                        <div style="position: absolute; right: 0; top: 0; height: 100%; display: flex; align-items: center;">
-                            <button type="button" id="biometric-private-btn" title="Biometric Unlock" style="background: none; border: none; color: var(--accent-color); cursor: pointer; padding: 10px; opacity: 0.6; transition: opacity 0.2s;">
-                                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A10.003 10.003 0 0012 3m0 0c.533 0 1.058.041 1.57.121m0 0a10.002 10.002 0 018.159 12.073m-7.5 4.806A9.992 9.992 0 0112 21c-1.83 0-3.52-.49-4.973-1.348m3.473-1.152a5.196 5.196 0 005.196-5.196v-1.127m-10.392 0v1.127a5.196 5.196 0 002.598 4.5m10.392-4.5c0-1.435-.581-2.735-1.523-3.677M12 8V7m0 1v1"></path></svg>
-                            </button>
-                            <button type="button" class="password-toggle" data-target="sec-private-key" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; height: 44px; width: 44px; display: flex; align-items: center; justify-content: center;">
-                                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                            </button>
-                        </div>
+                        <input type="password" id="sec-private-key" readonly placeholder="Click to Scan Fingerprint" style="width: 100%; padding: 12px; padding-right: 40px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 12px; outline: none; font-size: 16px; cursor: pointer;">
+                        <button type="button" class="password-toggle" data-target="sec-private-key" style="position: absolute; right: 0; top: 0; height: 100%; width: 44px; background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
                     </div>
 
                     <button type="submit" id="btn-auth-confirm" style="width: 100%; padding: 16px; background: var(--accent-color); color: #000; border: none; border-radius: 16px; font-weight: 700; font-size: 16px; cursor: pointer; transition: transform 0.1s;">Authenticate</button>
@@ -1035,21 +1025,18 @@
             },
 
             async biometricAction(type, inputEl) {
+                if (!window.PublicKeyCredential) {
+                    alert("WebAuthn (Biometrics) not supported in this browser.");
+                    return;
+                }
+
                 const storageKey = `biometric_${type}`;
                 const stored = localStorage.getItem(storageKey);
 
                 if (!stored) {
-                    // ENROLLMENT
-                    const password = inputEl.value;
-                    if (!password) {
-                        alert(`Please type your ${type.toUpperCase()} key first, then click the fingerprint icon to enroll it.`);
-                        return;
-                    }
-
-                    if (!window.PublicKeyCredential) {
-                        alert("WebAuthn (Biometrics) not supported in this browser.");
-                        return;
-                    }
+                    // ENROLLMENT (First time setup for this User)
+                    const confirmed = confirm(`Setup Biometric Identity for ${type.toUpperCase()}? This will create a unique secure key for this device.`);
+                    if (!confirmed) return;
 
                     try {
                         const challenge = window.crypto.getRandomValues(new Uint8Array(32));
@@ -1061,7 +1048,7 @@
                                 rp: { name: "Cameraman Pro" },
                                 user: {
                                     id: userID,
-                                    name: `User-${type}`,
+                                    name: `User-${type}-${Date.now()}`,
                                     displayName: `${type.toUpperCase()} Key Holder`
                                 },
                                 pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
@@ -1071,20 +1058,22 @@
                         });
 
                         if (credential) {
-                            // Store the password (UTF-8 safe Base64)
-                            const utf8Bytes = new TextEncoder().encode(password);
-                            const base64 = btoa(String.fromCharCode(...utf8Bytes));
-                            localStorage.setItem(storageKey, base64);
-                            alert(`${type.toUpperCase()} key enrolled with biometrics!`);
+                            // Generate a random high-entropy key for this biometric identity
+                            const randomKey = Array.from(window.crypto.getRandomValues(new Uint8Array(32)))
+                                .map(b => b.toString(16).padStart(2, '0')).join('');
+                            
+                            localStorage.setItem(storageKey, randomKey);
+                            inputEl.value = randomKey;
                             inputEl.style.boxShadow = "0 0 10px var(--accent-color)";
-                            document.getElementById(`biometric-${type}-btn`).style.opacity = "1";
+                            alert(`${type.toUpperCase()} identity established! Use this same device to unlock in the future.`);
                         }
                     } catch (err) {
                         console.error("Enrollment failed", err);
-                        if (err.name !== "NotAllowedError") alert("Biometric enrollment failed.");
+                        if (err.name !== "NotAllowedError") alert("Biometric setup failed.");
                     }
                 } else {
-                    // AUTHENTICATION
+                    // AUTHENTICATION (Normal Flow)
+                    inputEl.placeholder = "Verifying Identity...";
                     try {
                         const challenge = window.crypto.getRandomValues(new Uint8Array(32));
                         const assertion = await navigator.credentials.get({
@@ -1096,15 +1085,15 @@
                         });
 
                         if (assertion) {
-                            const base64 = stored;
-                            const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-                            inputEl.value = new TextDecoder().decode(bytes);
+                            inputEl.value = stored;
                             inputEl.style.boxShadow = "0 0 10px var(--accent-color)";
+                            inputEl.placeholder = "Identity Verified";
                         }
                     } catch (err) {
                         console.error("Authentication failed", err);
+                        inputEl.placeholder = "Click to Scan Fingerprint";
                         if (err.name === "NotAllowedError") return;
-                        alert("Biometric authentication failed.");
+                        alert("Biometric verification failed.");
                     }
                 }
             },
@@ -1120,17 +1109,14 @@
                 const playerOverlay = document.getElementById('secure-player-overlay');
                 const closePlayerBtn = document.getElementById('close-player-btn');
                 
-                // Biometric Buttons
-                document.getElementById('biometric-master-btn').onclick = () => this.biometricAction('master', masterInput);
-                document.getElementById('biometric-private-btn').onclick = () => this.biometricAction('private', privateInput);
-
-                // Check for existing enrollment to show visual hint
-                if (localStorage.getItem('biometric_master')) document.getElementById('biometric-master-btn').style.opacity = "1";
-                if (localStorage.getItem('biometric_private')) document.getElementById('biometric-private-btn').style.opacity = "1";
+                // Trigger scan on Click
+                masterInput.onclick = () => this.biometricAction('master', masterInput);
+                privateInput.onclick = () => this.biometricAction('private', privateInput);
 
                 // Toggle Eye Icons
                 document.querySelectorAll('.password-toggle').forEach(btn => {
                     btn.onclick = (e) => {
+                        e.stopPropagation(); // Don't trigger the click scan on the input
                         const targetId = btn.getAttribute('data-target');
                         const input = document.getElementById(targetId);
                         if (input.type === 'password') {
